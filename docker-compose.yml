@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: avito_crm_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: avito_crm
+    ports:
+      - "5432:5432"
+    volumes:
+      - avito_crm_pg:/var/lib/postgresql/data
+
+volumes:
+  avito_crm_pg:

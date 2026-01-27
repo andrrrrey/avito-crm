@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ChatStatus {
+  BOT
+  MANAGER
+}
+
+enum MessageDirection {
+  IN
+  OUT
+}
+
+model Chat {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Внешний ID чата Авито
+  avitoChatId     String   @unique
+  accountId       Int
+
+  status          ChatStatus @default(BOT)
+  pinned          Boolean    @default(false)
+
+  customerName    String?
+  itemTitle       String?
+  price           Int?
+  adUrl           String?
+  chatUrl         String?
+
+  lastMessageAt   DateTime?
+  lastMessageText String?
+
+  unreadCount     Int @default(0)
+
+  raw             Json @default("{}")
+
+  messages        Message[]
+
+  // индексы под твои сортировки и фильтры
+  @@index([status, pinned, lastMessageAt])
+  @@index([status, pinned, price])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+
+  chatId         String
+  chat           Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  // внешний id сообщения (в mock/ручной отправке тоже заполняем)
+  avitoMessageId String
+
+  direction      MessageDirection
+  text           String
+  sentAt         DateTime
+  isRead         Boolean @default(false)
+
+  raw            Json @default("{}")
+
+  @@unique([chatId, avitoMessageId], name: "chatId_avitoMessageId")
+  @@index([chatId, sentAt])
+  @@index([chatId, direction, isRead])
+}
+
+model IntegrationState {
+  id           Int      @id @default(1)
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+  updatedAt    DateTime @updatedAt
+}
+
+// Сырые входящие события (полезно для дедупа/диагностики)
+model WebhookEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  source    String
+  eventId   String?
+  type      String?
+
+  payload   Json     @default("{}")
+
+  @@index([source, createdAt])
+  @@unique([source, eventId])
+}
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  isActive     Boolean  @default(true)
+  role         String   @default("MANAGER")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  expiresAt  DateTime
+}
