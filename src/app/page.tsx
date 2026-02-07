@@ -821,6 +821,12 @@ function PageInner() {
           <div className="flex items-center gap-2">
             <Badge>{rtConnected ? "RT" : "RT off"}</Badge>
             {IS_MOCK ? <Badge>MOCK</Badge> : null}
+            <a
+              href="/ai-assistant"
+              className="inline-flex items-center rounded-xl bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-900/10 shadow-sm hover:bg-white transition"
+            >
+              AI Ассистент
+            </a>
           </div>
         </div>
       </div>
