@@ -1,5 +1,9 @@
 // src/app/api/avito/subscribe/route.ts
 // Управление подпиской на вебхуки Авито для мгновенной доставки сообщений.
+//
+// Avito API не поддерживает GET-проверку вебхук-подписок (возвращает 404),
+// поэтому состояние подписки хранится in-memory. После рестарта сервера
+// кнопку нужно нажать снова (подписка на стороне Avito сохраняется).
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { env } from "@/lib/env";
@@ -7,7 +11,6 @@ import { getAiSettings } from "@/lib/openai";
 import {
   avitoSubscribeWebhook,
   avitoUnsubscribeWebhook,
-  avitoGetWebhookSubscriptions,
 } from "@/lib/avito";
 
 export const runtime = "nodejs";
@@ -17,6 +20,25 @@ function buildWebhookUrl(): string {
   const base = (env.PUBLIC_BASE_URL ?? "").replace(/\/+$/, "");
   if (!base) throw new Error("PUBLIC_BASE_URL не настроен — задайте публичный URL сервера");
   return `${base}/api/avito/webhook?key=${encodeURIComponent(env.CRM_WEBHOOK_KEY)}`;
+}
+
+// ----- In-memory состояние подписки -----
+// Используем globalThis чтобы состояние жило в рамках Node.js процесса
+// и не сбрасывалось при HMR в dev режиме.
+type WebhookState = { subscribed: boolean; url: string | null; subscribedAt: string | null };
+const g = globalThis as any;
+if (!g.__webhookState) g.__webhookState = { subscribed: false, url: null, subscribedAt: null };
+
+function getWebhookState(): WebhookState {
+  return g.__webhookState;
+}
+
+function setWebhookState(url: string | null) {
+  g.__webhookState = {
+    subscribed: !!url,
+    url,
+    subscribedAt: url ? new Date().toISOString() : null,
+  };
 }
 
 /** Диагностика конфигурации */
@@ -69,41 +91,25 @@ export async function GET(req: Request) {
       ok: true,
       mock: true,
       subscribed: false,
-      subscriptions: [],
       webhookUrl: null,
       diagnostics,
     });
   }
 
+  let webhookUrl: string | null = null;
   try {
-    const subs = await avitoGetWebhookSubscriptions();
-    let webhookUrl: string | null = null;
-    try {
-      webhookUrl = buildWebhookUrl();
-    } catch {}
+    webhookUrl = buildWebhookUrl();
+  } catch {}
 
-    // Считаем подписанными, если есть хотя бы одна подписка с URL
-    const ours = webhookUrl
-      ? subs.find((s) => s.url && s.url === webhookUrl)
-      : null;
-    const hasAnySub = subs.some((s) => !!s.url);
+  const state = getWebhookState();
 
-    return NextResponse.json({
-      ok: true,
-      subscribed: !!(ours ?? hasAnySub),
-      activeSubscription: ours ?? (hasAnySub ? subs[0] : null),
-      subscriptions: subs,
-      webhookUrl,
-      diagnostics,
-    });
-  } catch (e: any) {
-    return NextResponse.json({
-      ok: false,
-      error: String(e?.message ?? e),
-      subscribed: false,
-      diagnostics,
-    });
-  }
+  return NextResponse.json({
+    ok: true,
+    subscribed: state.subscribed,
+    webhookUrl: state.url ?? webhookUrl,
+    subscribedAt: state.subscribedAt,
+    diagnostics,
+  });
 }
 
 /** POST — подписаться на вебхуки */
@@ -118,6 +124,10 @@ export async function POST(req: Request) {
   try {
     const webhookUrl = buildWebhookUrl();
     const sub = await avitoSubscribeWebhook(webhookUrl);
+
+    // Сохраняем состояние in-memory (Avito GET не поддерживает проверку)
+    setWebhookState(webhookUrl);
+
     return NextResponse.json({ ok: true, subscription: sub, webhookUrl });
   } catch (e: any) {
     return NextResponse.json(
@@ -138,11 +148,11 @@ export async function DELETE(req: Request) {
 
   try {
     await avitoUnsubscribeWebhook();
-    return NextResponse.json({ ok: true });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: String(e?.message ?? e) },
-      { status: 502 }
-    );
+    // Даже если DELETE на Avito упал, очищаем локальное состояние
+    console.warn("[Webhook] Unsubscribe from Avito failed:", e?.message);
   }
+
+  setWebhookState(null);
+  return NextResponse.json({ ok: true });
 }
