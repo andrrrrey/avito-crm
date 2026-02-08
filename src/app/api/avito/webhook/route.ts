@@ -769,6 +769,31 @@ export async function POST(req: Request) {
 
     // ✅ СРАЗУ публикуем события — НЕ ждём обогащение/price,
     //    иначе SSE задерживается на секунды-минуты (Avito API медленный)
+
+    // Загружаем снэпшот чата для мгновенного обновления UI
+    const chatSnap = await prisma.chat.findUnique({
+      where: { id: res.chatId },
+      select: {
+        id: true, status: true, customerName: true, itemTitle: true, price: true,
+        lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,
+        unreadCount: true, pinned: true,
+      },
+    });
+
+    const chatSnapshot = chatSnap ? {
+      id: chatSnap.id,
+      status: chatSnap.status as "BOT" | "MANAGER",
+      customerName: chatSnap.customerName,
+      itemTitle: chatSnap.itemTitle,
+      price: chatSnap.price,
+      lastMessageAt: chatSnap.lastMessageAt?.toISOString() ?? null,
+      lastMessageText: chatSnap.lastMessageText,
+      adUrl: chatSnap.adUrl,
+      chatUrl: chatSnap.chatUrl,
+      unreadCount: chatSnap.unreadCount,
+      pinned: chatSnap.pinned,
+    } : undefined;
+
     if (res.created && res.messageId) {
       publish({
         type: "message_created",
@@ -784,10 +809,21 @@ export async function POST(req: Request) {
           sentAt: createdAt.toISOString(),
           isRead: res.direction === "OUT" ? true : false,
         },
+        chatSnapshot,
       });
     }
 
-    publish({ type: "chat_updated", chatId: res.chatId, avitoChatId: res.avitoChatId });
+    // new_incoming — глобальное уведомление о входящем сообщении для звука/тоста
+    if (res.direction === "IN" && res.created) {
+      publish({
+        type: "new_incoming",
+        chatId: res.chatId,
+        avitoChatId: res.avitoChatId,
+        chatSnapshot,
+      });
+    }
+
+    publish({ type: "chat_updated", chatId: res.chatId, avitoChatId: res.avitoChatId, chatSnapshot });
 
     // ✅ Обогащение и price — fire-and-forget, не блокируем ответ вебхука
     if (!env.MOCK_MODE && res.needsEnrich && res.avitoChatId) {
@@ -801,8 +837,9 @@ export async function POST(req: Request) {
         .catch((e) => console.warn("[webhook] tryFillChatPrice error:", e));
     }
 
-    // ✅ Dev-бот и AI-ассистент — fire-and-forget, чтобы не блокировать webhook
+    // ✅ Dev-бот и AI-ассистент — fire-and-forget, параллельно, не блокируем webhook
     if (res.direction === "IN" && res.avitoChatId) {
+      // Dev-бот (только для dev/test) — отдельный fire-and-forget
       runDevTestBotIfNeeded({
         chatId: res.chatId,
         avitoChatId: res.avitoChatId,
@@ -810,15 +847,14 @@ export async function POST(req: Request) {
         incomingMessageId: avitoMessageId ? String(avitoMessageId) : null,
         incomingCreatedAtIso: createdAt.toISOString(),
         hintCustomerName: hints.customerName,
-      })
-        .then(() =>
-          tryAiAssistantReply({
-            chatId: res.chatId,
-            avitoChatId: res.avitoChatId,
-            incomingText: text,
-          }),
-        )
-        .catch((e) => console.error("[AI] tryAiAssistantReply error:", e));
+      }).catch((e) => console.error("[DevBot] error:", e));
+
+      // AI-ассистент — запускаем СРАЗУ, не дожидаясь dev-бота
+      tryAiAssistantReply({
+        chatId: res.chatId,
+        avitoChatId: res.avitoChatId,
+        incomingText: text,
+      }).catch((e) => console.error("[AI] tryAiAssistantReply error:", e));
     }
   }
 

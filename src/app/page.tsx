@@ -79,6 +79,7 @@ type RealtimeEvent = {
     sentAt: string; // ISO
     isRead: boolean;
   };
+  chatSnapshot?: ChatItem;
 };
 
 function cn(...xs: Array<string | false | null | undefined>) {
@@ -574,6 +575,34 @@ function PageInner() {
     }
   }, [selectedChatId, msgItems]);
 
+  // ===== Audio notification for incoming messages =====
+  const notifAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    // Создаём аудио-элемент из инлайн data-URI (короткий "ding")
+    // Используем Web Audio API fallback если data-URI не поддерживается
+    try {
+      const ctx = new AudioContext();
+      notifAudioRef.current = {
+        play: () => {
+          try {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = 880;
+            osc.type = "sine";
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.3);
+          } catch {}
+          return Promise.resolve();
+        },
+      } as any;
+    } catch {}
+  }, []);
+
   // ===== SSE (global) =====
   useEffect(() => {
     const es = new EventSource("/api/events");
@@ -589,6 +618,45 @@ function PageInner() {
       }, 120);
     };
 
+    /** Мгновенное обновление SWR-кэша списка чатов из chatSnapshot */
+    const applyChatSnapshot = (snapshot: ChatItem) => {
+      const mutator = snapshot.status === "BOT" ? mutateBOT : mutateMAN;
+      const otherMutator = snapshot.status === "BOT" ? mutateMAN : mutateBOT;
+
+      mutator(
+        (cur: any) => {
+          if (!cur) return cur;
+          const items: ChatItem[] = (cur.items ?? []) as ChatItem[];
+          const idx = items.findIndex((c) => c.id === snapshot.id);
+          let next: ChatItem[];
+          if (idx >= 0) {
+            next = [...items];
+            next[idx] = { ...next[idx], ...snapshot };
+          } else {
+            // Новый чат — добавляем в начало
+            next = [snapshot, ...items];
+          }
+          return { ...cur, items: next };
+        },
+        { revalidate: false },
+      );
+
+      // Убираем из противоположного списка (если статус сменился)
+      otherMutator(
+        (cur: any) => {
+          if (!cur) return cur;
+          const items: ChatItem[] = (cur.items ?? []) as ChatItem[];
+          const idx = items.findIndex((c) => c.id === snapshot.id);
+          if (idx >= 0) {
+            const next = items.filter((c) => c.id !== snapshot.id);
+            return { ...cur, items: next };
+          }
+          return cur;
+        },
+        { revalidate: false },
+      );
+    };
+
     const onAny = (ev: MessageEvent) => {
       let data: RealtimeEvent | null = null;
       try {
@@ -598,8 +666,34 @@ function PageInner() {
       }
       if (!data) return;
       if (data.type === "ping" || data.type === "hello") return;
-      pending.lists = true;
-      scheduleFlush();
+
+      // Если есть chatSnapshot — мгновенно обновляем кэш без SWR refetch
+      if (data.chatSnapshot) {
+        applyChatSnapshot(data.chatSnapshot);
+      } else {
+        // fallback — полный рефетч
+        pending.lists = true;
+        scheduleFlush();
+      }
+    };
+
+    // Обработчик new_incoming — звуковое уведомление
+    const onNewIncoming = (ev: MessageEvent) => {
+      let data: RealtimeEvent | null = null;
+      try {
+        data = JSON.parse(ev.data) as RealtimeEvent;
+      } catch {
+        return;
+      }
+      if (!data || data.type !== "new_incoming") return;
+
+      // Звуковой сигнал
+      notifAudioRef.current?.play?.()?.catch?.(() => {});
+
+      // Если есть chatSnapshot — обновляем список
+      if (data.chatSnapshot) {
+        applyChatSnapshot(data.chatSnapshot);
+      }
     };
 
     es.onopen = () => setRtConnected(true);
@@ -607,6 +701,7 @@ function PageInner() {
 
     const types = ["chat_updated", "chat_read", "chat_pinned", "chat_finished"] as const;
     for (const t of types) es.addEventListener(t, onAny as any);
+    es.addEventListener("new_incoming", onNewIncoming as any);
 
     return () => {
       try {
@@ -744,6 +839,36 @@ function PageInner() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
 
+  // ===== Webhook subscription status =====
+  const { data: webhookData, mutate: mutateWebhook } = useSWR<any>(
+    "/api/avito/subscribe",
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 0 }
+  );
+  const webhookSubscribed = webhookData?.subscribed ?? false;
+  const [webhookLoading, setWebhookLoading] = useState(false);
+
+  async function toggleWebhookSubscription() {
+    setWebhookLoading(true);
+    try {
+      if (webhookSubscribed) {
+        const subId = webhookData?.activeSubscription?.id;
+        await apiFetch("/api/avito/subscribe", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subscriptionId: subId }),
+        });
+      } else {
+        await apiFetch("/api/avito/subscribe", { method: "POST" });
+      }
+      await mutateWebhook();
+    } catch (e: any) {
+      console.error("Webhook toggle error:", e);
+    } finally {
+      setWebhookLoading(false);
+    }
+  }
+
   async function selectChat(id: string) {
     const u = new URL(window.location.href);
     u.searchParams.set("chat", id);
@@ -817,12 +942,35 @@ function PageInner() {
           <div>
             <div className="text-base font-bold text-slate-900">Avito CRM</div>
             <div className="text-xs text-slate-500">
-              Две колонки + чат. Непрочитанные, pin, завершение диалога.
+              Мгновенные сообщения + AI-ответы
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Badge>{rtConnected ? "RT" : "RT off"}</Badge>
             {IS_MOCK ? <Badge>MOCK</Badge> : null}
+
+            {/* Webhook status */}
+            {!IS_MOCK && (
+              <button
+                onClick={toggleWebhookSubscription}
+                disabled={webhookLoading}
+                className={cn(
+                  "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 transition",
+                  webhookSubscribed
+                    ? "bg-emerald-600/10 text-emerald-800 ring-emerald-700/20"
+                    : "bg-amber-600/10 text-amber-800 ring-amber-700/20",
+                  webhookLoading ? "opacity-50 pointer-events-none" : "hover:opacity-80 cursor-pointer"
+                )}
+                title={
+                  webhookSubscribed
+                    ? "Вебхук Avito активен. Нажмите чтобы отключить."
+                    : "Вебхук Avito не подключён. Нажмите чтобы подключить."
+                }
+              >
+                {webhookSubscribed ? "Webhook ON" : "Webhook OFF"}
+              </button>
+            )}
+
             <a
               href="/ai-assistant"
               className="inline-flex items-center rounded-xl bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-900/10 shadow-sm hover:bg-white transition"

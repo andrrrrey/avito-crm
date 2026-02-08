@@ -14,7 +14,8 @@ export type CRMRealtimeEvent = {
     | "message_created"
     | "chat_finished"
     | "chat_pinned"
-    | "chat_read";
+    | "chat_read"
+    | "new_incoming";
   ts: number;
   chatId?: string;
   avitoChatId?: string;
@@ -30,6 +31,21 @@ export type CRMRealtimeEvent = {
     text: string;
     sentAt: string;
     isRead: boolean;
+  };
+
+  // Снэпшот чата для мгновенного обновления списка без перезапроса.
+  chatSnapshot?: {
+    id: string;
+    status: "BOT" | "MANAGER";
+    customerName: string | null;
+    itemTitle: string | null;
+    price: number | null;
+    lastMessageAt: string | null;
+    lastMessageText: string | null;
+    adUrl: string | null;
+    chatUrl: string | null;
+    unreadCount: number;
+    pinned: boolean;
   };
 };
 
