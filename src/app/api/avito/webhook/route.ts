@@ -799,16 +799,13 @@ export async function POST(req: Request) {
         hintCustomerName: hints.customerName,
       });
 
-      // AI-ассистент: отвечаем через ChatGPT если включён и чат в статусе BOT
-      try {
-        await tryAiAssistantReply({
-          chatId: res.chatId,
-          avitoChatId: res.avitoChatId,
-          incomingText: text,
-        });
-      } catch (e) {
-        console.error("[AI] tryAiAssistantReply error:", e);
-      }
+      // AI-ассистент: fire-and-forget — не блокируем ответ вебхука,
+      // иначе Avito таймаутит (OpenAI отвечает 10-60 сек)
+      tryAiAssistantReply({
+        chatId: res.chatId,
+        avitoChatId: res.avitoChatId,
+        incomingText: text,
+      }).catch((e) => console.error("[AI] tryAiAssistantReply error:", e));
     }
   }
 
