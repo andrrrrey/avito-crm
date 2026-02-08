@@ -385,3 +385,128 @@ export async function avitoMarkChatRead(avitoChatId: string, lastMessageId?: str
     `Avito mark read failed for chat=${avitoChatId}: ${String(lastErr?.message ?? lastErr)}`
   );
 }
+
+// ===== Webhook subscription =====
+
+export type AvitoWebhookSubscription = {
+  id?: string;
+  url?: string;
+  raw: any;
+};
+
+/**
+ * Subscribe to Avito webhook notifications (instant message delivery).
+ * Tries v3 → v2 → v1 endpoints.
+ */
+export async function avitoSubscribeWebhook(webhookUrl: string): Promise<AvitoWebhookSubscription> {
+  const accountId = env.AVITO_ACCOUNT_ID;
+  if (!accountId) throw new Error("AVITO_ACCOUNT_ID is missing");
+
+  const body = JSON.stringify({ url: webhookUrl });
+  const headers = { "Content-Type": "application/json" };
+
+  const endpoints = [
+    `/messenger/v3/accounts/${accountId}/webhook`,
+    `/messenger/v2/accounts/${accountId}/subscriptions_v2`,
+    `/messenger/v2/accounts/${accountId}/subscriptions`,
+    `/messenger/v1/subscriptions/${accountId}`,
+  ];
+
+  let lastErr: any = null;
+
+  for (const ep of endpoints) {
+    try {
+      const resp: any = await avitoFetch(ep, { method: "POST", headers, body });
+      return {
+        id: resp?.id ?? resp?.subscription_id ?? resp?.subscriptionId ?? undefined,
+        url: resp?.url ?? webhookUrl,
+        raw: resp,
+      };
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+
+  throw new Error(
+    `Avito webhook subscribe failed: ${String(lastErr?.message ?? lastErr)}`
+  );
+}
+
+/**
+ * Unsubscribe from Avito webhook notifications.
+ */
+export async function avitoUnsubscribeWebhook(subscriptionId?: string): Promise<void> {
+  const accountId = env.AVITO_ACCOUNT_ID;
+  if (!accountId) throw new Error("AVITO_ACCOUNT_ID is missing");
+
+  const endpoints = subscriptionId
+    ? [
+        `/messenger/v3/accounts/${accountId}/webhook`,
+        `/messenger/v2/accounts/${accountId}/subscriptions/${subscriptionId}`,
+        `/messenger/v1/subscriptions/${accountId}`,
+      ]
+    : [
+        `/messenger/v3/accounts/${accountId}/webhook`,
+        `/messenger/v1/subscriptions/${accountId}`,
+      ];
+
+  let lastErr: any = null;
+
+  for (const ep of endpoints) {
+    try {
+      await avitoFetch(ep, { method: "DELETE" });
+      return;
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+
+  throw new Error(
+    `Avito webhook unsubscribe failed: ${String(lastErr?.message ?? lastErr)}`
+  );
+}
+
+/**
+ * Get current Avito webhook subscriptions.
+ */
+export async function avitoGetWebhookSubscriptions(): Promise<AvitoWebhookSubscription[]> {
+  const accountId = env.AVITO_ACCOUNT_ID;
+  if (!accountId) throw new Error("AVITO_ACCOUNT_ID is missing");
+
+  const endpoints = [
+    `/messenger/v3/accounts/${accountId}/webhook`,
+    `/messenger/v2/accounts/${accountId}/subscriptions`,
+    `/messenger/v1/subscriptions/${accountId}`,
+  ];
+
+  let lastErr: any = null;
+
+  for (const ep of endpoints) {
+    try {
+      const resp: any = await avitoFetch(ep, { method: "GET" });
+
+      // Normalize to array
+      const items: any[] = Array.isArray(resp?.subscriptions)
+        ? resp.subscriptions
+        : Array.isArray(resp?.items)
+          ? resp.items
+          : Array.isArray(resp)
+            ? resp
+            : resp?.url
+              ? [resp]
+              : [];
+
+      return items.map((s: any) => ({
+        id: s?.id ?? s?.subscription_id ?? s?.subscriptionId ?? undefined,
+        url: s?.url ?? undefined,
+        raw: s,
+      }));
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+
+  throw new Error(
+    `Avito get webhook subscriptions failed: ${String(lastErr?.message ?? lastErr)}`
+  );
+}
