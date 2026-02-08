@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { publish } from "@/lib/realtime";
 import { avitoGetChatInfo, avitoSendTextMessage, avitoGetItemInfo } from "@/lib/avito";
 import { pickFirstString, pickFirstNumber } from "@/lib/utils";
+import { getAssistantReply } from "@/lib/openai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -371,6 +372,157 @@ async function runDevTestBotIfNeeded(args: {
   } catch {}
 }
 
+/** AI-ассистент: если чат в статусе BOT и ассистент включён — отвечаем через ChatGPT */
+async function tryAiAssistantReply(args: {
+  chatId: string;
+  avitoChatId: string;
+  incomingText: string;
+}) {
+  // Проверяем, что чат в статусе BOT
+  const chat = await prisma.chat.findUnique({
+    where: { id: args.chatId },
+    select: { id: true, avitoChatId: true, status: true, raw: true },
+  });
+  if (!chat || chat.status !== "BOT") return;
+
+  const text = (args.incomingText ?? "").trim();
+  if (!text) return;
+
+  let replyText: string | null = null;
+  try {
+    replyText = await getAssistantReply(chat.id, text);
+  } catch (e) {
+    console.error("[AI] getAssistantReply error:", e);
+    return;
+  }
+  if (!replyText) return;
+
+  // Отправляем ответ
+  const sentAt = new Date();
+  const rawObj = (chat.raw && typeof chat.raw === "object") ? (chat.raw as Record<string, unknown>) : {};
+
+  if (env.MOCK_MODE) {
+    const fakeId = `ai_out_${Date.now()}`;
+    const ins = await prisma.message.createMany({
+      data: [{
+        chatId: chat.id,
+        avitoMessageId: fakeId,
+        direction: "OUT" as const,
+        text: replyText,
+        sentAt,
+        isRead: true,
+        raw: { mock: true, from: "ai_assistant" },
+      }],
+      skipDuplicates: true,
+    });
+
+    await prisma.chat.update({
+      where: { id: chat.id },
+      data: { lastMessageAt: sentAt, lastMessageText: replyText },
+    });
+
+    // Помечаем входящие прочитанными
+    await prisma.message.updateMany({
+      where: { chatId: chat.id, direction: "IN", isRead: false, sentAt: { lte: sentAt } },
+      data: { isRead: true },
+    });
+    const unread = await prisma.message.count({
+      where: { chatId: chat.id, direction: "IN", isRead: false },
+    });
+    await prisma.chat.update({ where: { id: chat.id }, data: { unreadCount: unread } });
+
+    publish({ type: "chat_read", chatId: chat.id, avitoChatId: chat.avitoChatId });
+
+    if (ins.count > 0) {
+      publish({
+        type: "message_created",
+        chatId: chat.id,
+        avitoChatId: chat.avitoChatId,
+        messageId: fakeId,
+        direction: "OUT",
+        message: {
+          id: fakeId,
+          chatId: chat.id,
+          direction: "OUT",
+          text: replyText,
+          sentAt: sentAt.toISOString(),
+          isRead: true,
+        },
+      });
+    }
+    publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+    return;
+  }
+
+  // REAL MODE — отправляем в Avito
+  try {
+    const resp: any = await avitoSendTextMessage(chat.avitoChatId, replyText);
+    const outId = pickFirstString(
+      resp?.id,
+      resp?.message_id,
+      resp?.value?.id,
+      resp?.result?.id,
+    ) ?? `ai_${Date.now()}`;
+
+    const ins = await prisma.message.createMany({
+      data: [{
+        chatId: chat.id,
+        avitoMessageId: outId,
+        direction: "OUT" as const,
+        text: replyText,
+        sentAt,
+        isRead: true,
+        raw: { from: "ai_assistant", avitoSendResp: resp ?? {} },
+      }],
+      skipDuplicates: true,
+    });
+
+    await prisma.chat.update({
+      where: { id: chat.id },
+      data: { lastMessageAt: sentAt, lastMessageText: replyText },
+    });
+
+    // Помечаем входящие прочитанными
+    await prisma.message.updateMany({
+      where: { chatId: chat.id, direction: "IN", isRead: false, sentAt: { lte: sentAt } },
+      data: { isRead: true },
+    });
+    const unread = await prisma.message.count({
+      where: { chatId: chat.id, direction: "IN", isRead: false },
+    });
+    await prisma.chat.update({ where: { id: chat.id }, data: { unreadCount: unread } });
+
+    publish({ type: "chat_read", chatId: chat.id, avitoChatId: chat.avitoChatId });
+
+    if (ins.count > 0) {
+      const dbMsg = await prisma.message.findUnique({
+        where: { chatId_avitoMessageId: { chatId: chat.id, avitoMessageId: outId } },
+        select: { id: true },
+      });
+
+      publish({
+        type: "message_created",
+        chatId: chat.id,
+        avitoChatId: chat.avitoChatId,
+        messageId: dbMsg?.id ?? outId,
+        direction: "OUT",
+        message: {
+          id: dbMsg?.id ?? outId,
+          chatId: chat.id,
+          direction: "OUT",
+          text: replyText,
+          sentAt: sentAt.toISOString(),
+          isRead: true,
+        },
+      });
+    }
+
+    publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+  } catch (e) {
+    console.error("[AI] Failed to send AI reply to Avito:", e);
+  }
+}
+
 async function enrichChatFromAvitoIfMissing(chatId: string, avitoChatId: string) {
   const cur = await prisma.chat.findUnique({
     where: { id: chatId },
@@ -646,6 +798,17 @@ export async function POST(req: Request) {
         incomingCreatedAtIso: createdAt.toISOString(),
         hintCustomerName: hints.customerName,
       });
+
+      // AI-ассистент: отвечаем через ChatGPT если включён и чат в статусе BOT
+      try {
+        await tryAiAssistantReply({
+          chatId: res.chatId,
+          avitoChatId: res.avitoChatId,
+          incomingText: text,
+        });
+      } catch (e) {
+        console.error("[AI] tryAiAssistantReply error:", e);
+      }
     }
   }
 

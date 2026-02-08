@@ -14,6 +14,82 @@ export async function getOpenAIClient(): Promise<OpenAI | null> {
   return new OpenAI({ apiKey: settings.apiKey });
 }
 
+/**
+ * Отправить сообщение пользователя в OpenAI Assistants API и получить ответ.
+ * Использует thread per chat (хранится в raw.openaiThreadId).
+ */
+export async function getAssistantReply(
+  chatId: string,
+  incomingText: string,
+): Promise<string | null> {
+  const settings = await getAiSettings();
+  if (!settings?.enabled || !settings.apiKey || !settings.assistantId) {
+    return null;
+  }
+
+  const client = new OpenAI({ apiKey: settings.apiKey });
+
+  // Получаем или создаём thread для этого чата
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { id: true, raw: true },
+  });
+  if (!chat) return null;
+
+  const rawObj = (chat.raw && typeof chat.raw === "object") ? (chat.raw as Record<string, unknown>) : {};
+  let threadId = rawObj.openaiThreadId as string | undefined;
+
+  if (!threadId) {
+    // Создаём новый thread
+    const thread = await client.beta.threads.create();
+    threadId = thread.id;
+
+    // Сохраняем threadId в raw
+    await prisma.chat.update({
+      where: { id: chatId },
+      data: { raw: { ...rawObj, openaiThreadId: threadId } },
+    });
+  }
+
+  // Добавляем сообщение пользователя в thread
+  await client.beta.threads.messages.create(threadId, {
+    role: "user",
+    content: incomingText,
+  });
+
+  // Запускаем run с ассистентом
+  const runParams: OpenAI.Beta.Threads.Runs.RunCreateParams = {
+    assistant_id: settings.assistantId,
+  };
+
+  // Если есть инструкция — передаём как additional_instructions
+  if (settings.instructions) {
+    runParams.additional_instructions = settings.instructions;
+  }
+
+  const run = await client.beta.threads.runs.createAndPoll(threadId, runParams);
+
+  if (run.status !== "completed") {
+    console.error(`[AI] Run finished with status: ${run.status}`, run.last_error);
+    return null;
+  }
+
+  // Забираем последнее сообщение ассистента
+  const messages = await client.beta.threads.messages.list(threadId, {
+    order: "desc",
+    limit: 1,
+  });
+
+  const assistantMsg = messages.data[0];
+  if (!assistantMsg || assistantMsg.role !== "assistant") return null;
+
+  // Извлекаем текст
+  const textBlock = assistantMsg.content.find((c) => c.type === "text");
+  if (!textBlock || textBlock.type !== "text") return null;
+
+  return textBlock.text.value || null;
+}
+
 /** Список файлов в vector store */
 export async function listVectorStoreFiles(apiKey: string, vectorStoreId: string) {
   const client = new OpenAI({ apiKey });
