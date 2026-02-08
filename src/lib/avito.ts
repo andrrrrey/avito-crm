@@ -395,21 +395,27 @@ export type AvitoWebhookSubscription = {
 };
 
 /**
- * Subscribe to Avito webhook notifications (instant message delivery).
- * Tries v3 → v2 → v1 endpoints.
+ * Подписаться на вебхук-уведомления Avito (мгновенная доставка сообщений).
+ *
+ * Правильный эндпоинт: POST /messenger/v3/webhook
+ * Body: { url: "https://...", secret: "<client_secret>" }
+ * Ответ: "ok" (status 200)
+ *
+ * Документация: https://developers.avito.ru/api-catalog/messenger
  */
 export async function avitoSubscribeWebhook(webhookUrl: string): Promise<AvitoWebhookSubscription> {
-  const accountId = env.AVITO_ACCOUNT_ID;
-  if (!accountId) throw new Error("AVITO_ACCOUNT_ID is missing");
+  // secret — это client_secret из OAuth-конфигурации
+  const secret = env.AVITO_CLIENT_SECRET;
+  if (!secret) throw new Error("AVITO_CLIENT_SECRET is missing — нужен для подписки на вебхук");
 
-  const body = JSON.stringify({ url: webhookUrl });
+  const body = JSON.stringify({ url: webhookUrl, secret });
   const headers = { "Content-Type": "application/json" };
 
+  // Основной эндпоинт: /messenger/v3/webhook (без account_id в пути)
+  // Fallback: /messenger/v1/subscriptions (старый формат)
   const endpoints = [
-    `/messenger/v3/accounts/${accountId}/webhook`,
-    `/messenger/v2/accounts/${accountId}/subscriptions_v2`,
-    `/messenger/v2/accounts/${accountId}/subscriptions`,
-    `/messenger/v1/subscriptions/${accountId}`,
+    "/messenger/v3/webhook",
+    "/messenger/v1/subscriptions",
   ];
 
   let lastErr: any = null;
@@ -417,12 +423,14 @@ export async function avitoSubscribeWebhook(webhookUrl: string): Promise<AvitoWe
   for (const ep of endpoints) {
     try {
       const resp: any = await avitoFetch(ep, { method: "POST", headers, body });
+      console.log(`[Avito] Webhook subscribed via ${ep}:`, JSON.stringify(resp).slice(0, 200));
       return {
-        id: resp?.id ?? resp?.subscription_id ?? resp?.subscriptionId ?? undefined,
-        url: resp?.url ?? webhookUrl,
+        id: resp?.id ?? resp?.subscription_id ?? undefined,
+        url: webhookUrl,
         raw: resp,
       };
     } catch (e: any) {
+      console.warn(`[Avito] Webhook subscribe via ${ep} failed:`, e?.message);
       lastErr = e;
     }
   }
@@ -433,32 +441,40 @@ export async function avitoSubscribeWebhook(webhookUrl: string): Promise<AvitoWe
 }
 
 /**
- * Unsubscribe from Avito webhook notifications.
+ * Отписаться от вебхук-уведомлений Avito.
+ *
+ * DELETE /messenger/v3/webhook или POST /messenger/v3/webhook с пустым url.
  */
-export async function avitoUnsubscribeWebhook(subscriptionId?: string): Promise<void> {
-  const accountId = env.AVITO_ACCOUNT_ID;
-  if (!accountId) throw new Error("AVITO_ACCOUNT_ID is missing");
-
-  const endpoints = subscriptionId
-    ? [
-        `/messenger/v3/accounts/${accountId}/webhook`,
-        `/messenger/v2/accounts/${accountId}/subscriptions/${subscriptionId}`,
-        `/messenger/v1/subscriptions/${accountId}`,
-      ]
-    : [
-        `/messenger/v3/accounts/${accountId}/webhook`,
-        `/messenger/v1/subscriptions/${accountId}`,
-      ];
+export async function avitoUnsubscribeWebhook(): Promise<void> {
+  const endpoints = [
+    "/messenger/v3/webhook",
+    "/messenger/v1/subscriptions",
+  ];
 
   let lastErr: any = null;
 
   for (const ep of endpoints) {
     try {
       await avitoFetch(ep, { method: "DELETE" });
+      console.log(`[Avito] Webhook unsubscribed via ${ep}`);
       return;
     } catch (e: any) {
+      console.warn(`[Avito] Webhook unsubscribe DELETE ${ep} failed:`, e?.message);
       lastErr = e;
     }
+  }
+
+  // Fallback: POST с пустым url
+  try {
+    await avitoFetch("/messenger/v3/webhook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: "" }),
+    });
+    console.log("[Avito] Webhook unsubscribed via POST empty url");
+    return;
+  } catch (e: any) {
+    lastErr = e;
   }
 
   throw new Error(
@@ -467,16 +483,15 @@ export async function avitoUnsubscribeWebhook(subscriptionId?: string): Promise<
 }
 
 /**
- * Get current Avito webhook subscriptions.
+ * Получить текущие подписки на вебхуки.
+ *
+ * GET /messenger/v1/subscriptions — возвращает установленный вебхук.
+ * GET /messenger/v3/webhook — альтернатива.
  */
 export async function avitoGetWebhookSubscriptions(): Promise<AvitoWebhookSubscription[]> {
-  const accountId = env.AVITO_ACCOUNT_ID;
-  if (!accountId) throw new Error("AVITO_ACCOUNT_ID is missing");
-
   const endpoints = [
-    `/messenger/v3/accounts/${accountId}/webhook`,
-    `/messenger/v2/accounts/${accountId}/subscriptions`,
-    `/messenger/v1/subscriptions/${accountId}`,
+    "/messenger/v1/subscriptions",
+    "/messenger/v3/webhook",
   ];
 
   let lastErr: any = null;
@@ -485,7 +500,7 @@ export async function avitoGetWebhookSubscriptions(): Promise<AvitoWebhookSubscr
     try {
       const resp: any = await avitoFetch(ep, { method: "GET" });
 
-      // Normalize to array
+      // Нормализуем ответ в массив
       const items: any[] = Array.isArray(resp?.subscriptions)
         ? resp.subscriptions
         : Array.isArray(resp?.items)
@@ -502,6 +517,7 @@ export async function avitoGetWebhookSubscriptions(): Promise<AvitoWebhookSubscr
         raw: s,
       }));
     } catch (e: any) {
+      console.warn(`[Avito] Get subscriptions via ${ep} failed:`, e?.message);
       lastErr = e;
     }
   }

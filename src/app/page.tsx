@@ -846,24 +846,27 @@ function PageInner() {
     { revalidateOnFocus: false, refreshInterval: 0 }
   );
   const webhookSubscribed = webhookData?.subscribed ?? false;
+  const webhookDiag = webhookData?.diagnostics;
   const [webhookLoading, setWebhookLoading] = useState(false);
+  const [webhookError, setWebhookError] = useState<string | null>(null);
+  const [showDiag, setShowDiag] = useState(false);
 
   async function toggleWebhookSubscription() {
     setWebhookLoading(true);
+    setWebhookError(null);
     try {
       if (webhookSubscribed) {
-        const subId = webhookData?.activeSubscription?.id;
-        await apiFetch("/api/avito/subscribe", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ subscriptionId: subId }),
-        });
+        await apiFetch("/api/avito/subscribe", { method: "DELETE" });
       } else {
-        await apiFetch("/api/avito/subscribe", { method: "POST" });
+        const resp = await apiFetch("/api/avito/subscribe", { method: "POST" });
+        const json = await resp.json().catch(() => null);
+        if (json && !json.ok) {
+          setWebhookError(json.error || "Не удалось подключить вебхук");
+        }
       }
       await mutateWebhook();
     } catch (e: any) {
-      console.error("Webhook toggle error:", e);
+      setWebhookError(String(e?.message ?? "Ошибка при переключении вебхука"));
     } finally {
       setWebhookLoading(false);
     }
@@ -949,6 +952,18 @@ function PageInner() {
             <Badge>{rtConnected ? "RT" : "RT off"}</Badge>
             {IS_MOCK ? <Badge>MOCK</Badge> : null}
 
+            {/* AI status */}
+            {webhookDiag && (
+              <span className={cn(
+                "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1",
+                webhookDiag.aiConfigured
+                  ? "bg-emerald-600/10 text-emerald-800 ring-emerald-700/20"
+                  : "bg-rose-600/10 text-rose-800 ring-rose-700/20"
+              )}>
+                {webhookDiag.aiConfigured ? "AI ON" : "AI OFF"}
+              </span>
+            )}
+
             {/* Webhook status */}
             {!IS_MOCK && (
               <button
@@ -964,10 +979,21 @@ function PageInner() {
                 title={
                   webhookSubscribed
                     ? "Вебхук Avito активен. Нажмите чтобы отключить."
-                    : "Вебхук Avito не подключён. Нажмите чтобы подключить."
+                    : "Вебхук Avito не подключён. Нажмите чтобы подключить мгновенную доставку сообщений."
                 }
               >
                 {webhookSubscribed ? "Webhook ON" : "Webhook OFF"}
+              </button>
+            )}
+
+            {/* Diagnostics toggle */}
+            {webhookDiag && !webhookDiag.healthy && (
+              <button
+                onClick={() => setShowDiag((v) => !v)}
+                className="inline-flex items-center rounded-full bg-rose-600/10 px-2 py-0.5 text-xs font-medium text-rose-800 ring-1 ring-rose-700/20 hover:opacity-80 cursor-pointer transition"
+                title="Есть проблемы с конфигурацией"
+              >
+                {webhookDiag.issues?.length ?? 0} проблем
               </button>
             )}
 
@@ -979,6 +1005,28 @@ function PageInner() {
             </a>
           </div>
         </div>
+
+        {/* Diagnostics panel */}
+        {showDiag && webhookDiag?.issues?.length > 0 && (
+          <div className="mx-auto max-w-[1600px] px-4 pb-3">
+            <div className="rounded-2xl bg-rose-50 ring-1 ring-rose-200 p-3 space-y-1">
+              <div className="text-xs font-semibold text-rose-900">Диагностика конфигурации:</div>
+              {webhookDiag.issues.map((issue: string, i: number) => (
+                <div key={i} className="text-xs text-rose-800">• {issue}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Webhook error */}
+        {webhookError && (
+          <div className="mx-auto max-w-[1600px] px-4 pb-3">
+            <div className="rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-3 flex items-center justify-between">
+              <div className="text-xs text-amber-900">{webhookError}</div>
+              <button onClick={() => setWebhookError(null)} className="text-xs text-amber-700 hover:text-amber-900 ml-2">x</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main area */}
