@@ -24,8 +24,15 @@ export async function getAssistantReply(
 ): Promise<string | null> {
   const settings = await getAiSettings();
   if (!settings?.enabled || !settings.apiKey || !settings.assistantId) {
+    console.log("[AI] Skip: assistant disabled or missing settings", {
+      enabled: settings?.enabled,
+      hasKey: !!settings?.apiKey,
+      hasAssistant: !!settings?.assistantId,
+    });
     return null;
   }
+
+  console.log(`[AI] Processing message for chat ${chatId}: "${incomingText.slice(0, 80)}"`);
 
   const client = new OpenAI({ apiKey: settings.apiKey });
 
@@ -40,7 +47,7 @@ export async function getAssistantReply(
   let threadId = rawObj.openaiThreadId as string | undefined;
 
   if (!threadId) {
-    // Создаём новый thread
+    console.log(`[AI] Creating new thread for chat ${chatId}`);
     const thread = await client.beta.threads.create();
     threadId = thread.id;
 
@@ -67,6 +74,7 @@ export async function getAssistantReply(
     runParams.additional_instructions = settings.instructions;
   }
 
+  console.log(`[AI] Starting run for thread ${threadId}, assistant ${settings.assistantId}`);
   const run = await client.beta.threads.runs.createAndPoll(threadId, runParams);
 
   if (run.status !== "completed") {
@@ -87,7 +95,9 @@ export async function getAssistantReply(
   const textBlock = assistantMsg.content.find((c) => c.type === "text");
   if (!textBlock || textBlock.type !== "text") return null;
 
-  return textBlock.text.value || null;
+  const reply = textBlock.text.value || null;
+  console.log(`[AI] Got reply for chat ${chatId}: "${(reply ?? "").slice(0, 100)}"`);
+  return reply;
 }
 
 /** Список файлов в vector store */
