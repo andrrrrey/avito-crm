@@ -483,8 +483,10 @@ function PageInner() {
 
   const refreshedChatsRef = useRef<Set<string>>(new Set());
 
-  const listRefresh = rtConnected ? 0 : 1500;
-  const msgRefresh = rtConnected ? 0 : 1500;
+  // ✅ Даже при подключённом SSE оставляем фоновый polling как подстраховку,
+  //    чтобы пропущенные события не вызывали бесконечную задержку
+  const listRefresh = rtConnected ? 30_000 : 1500;
+  const msgRefresh = rtConnected ? 15_000 : 1500;
 
   const { data: botData, mutate: mutateBOT } = useSWR<any>(
     `/api/chats?${qsBOT}`,

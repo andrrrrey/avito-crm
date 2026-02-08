@@ -383,10 +383,20 @@ async function tryAiAssistantReply(args: {
     where: { id: args.chatId },
     select: { id: true, avitoChatId: true, status: true, raw: true },
   });
-  if (!chat || chat.status !== "BOT") return;
+  if (!chat) {
+    console.log("[AI] Skip: chat not found", { chatId: args.chatId });
+    return;
+  }
+  if (chat.status !== "BOT") {
+    console.log("[AI] Skip: chat status is not BOT", { chatId: args.chatId, status: chat.status });
+    return;
+  }
 
   const text = (args.incomingText ?? "").trim();
-  if (!text) return;
+  if (!text) {
+    console.log("[AI] Skip: empty incoming text", { chatId: args.chatId });
+    return;
+  }
 
   let replyText: string | null = null;
   try {
@@ -757,18 +767,8 @@ export async function POST(req: Request) {
       };
     });
 
-    if (!env.MOCK_MODE && res.needsEnrich && res.avitoChatId) {
-      try {
-        await enrichChatFromAvitoIfMissing(res.chatId, res.avitoChatId);
-        publish({ type: "chat_updated", chatId: res.chatId, avitoChatId: res.avitoChatId });
-      } catch {}
-    }
-
-    // ✅ пробуем заполнить price (если есть itemId)
-    if (!env.MOCK_MODE && res.itemId) {
-      await tryFillChatPrice(res.chatId, Number(res.itemId));
-    }
-
+    // ✅ СРАЗУ публикуем события — НЕ ждём обогащение/price,
+    //    иначе SSE задерживается на секунды-минуты (Avito API медленный)
     if (res.created && res.messageId) {
       publish({
         type: "message_created",
@@ -789,23 +789,36 @@ export async function POST(req: Request) {
 
     publish({ type: "chat_updated", chatId: res.chatId, avitoChatId: res.avitoChatId });
 
+    // ✅ Обогащение и price — fire-and-forget, не блокируем ответ вебхука
+    if (!env.MOCK_MODE && res.needsEnrich && res.avitoChatId) {
+      enrichChatFromAvitoIfMissing(res.chatId, res.avitoChatId)
+        .then(() => publish({ type: "chat_updated", chatId: res.chatId, avitoChatId: res.avitoChatId }))
+        .catch((e) => console.warn("[webhook] enrichChatFromAvitoIfMissing error:", e));
+    }
+
+    if (!env.MOCK_MODE && res.itemId) {
+      tryFillChatPrice(res.chatId, Number(res.itemId))
+        .catch((e) => console.warn("[webhook] tryFillChatPrice error:", e));
+    }
+
+    // ✅ Dev-бот и AI-ассистент — fire-and-forget, чтобы не блокировать webhook
     if (res.direction === "IN" && res.avitoChatId) {
-      await runDevTestBotIfNeeded({
+      runDevTestBotIfNeeded({
         chatId: res.chatId,
         avitoChatId: res.avitoChatId,
         incomingText: text,
         incomingMessageId: avitoMessageId ? String(avitoMessageId) : null,
         incomingCreatedAtIso: createdAt.toISOString(),
         hintCustomerName: hints.customerName,
-      });
-
-      // AI-ассистент: fire-and-forget — не блокируем ответ вебхука,
-      // иначе Avito таймаутит (OpenAI отвечает 10-60 сек)
-      tryAiAssistantReply({
-        chatId: res.chatId,
-        avitoChatId: res.avitoChatId,
-        incomingText: text,
-      }).catch((e) => console.error("[AI] tryAiAssistantReply error:", e));
+      })
+        .then(() =>
+          tryAiAssistantReply({
+            chatId: res.chatId,
+            avitoChatId: res.avitoChatId,
+            incomingText: text,
+          }),
+        )
+        .catch((e) => console.error("[AI] tryAiAssistantReply error:", e));
     }
   }
 
