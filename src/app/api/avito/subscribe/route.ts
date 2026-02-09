@@ -13,6 +13,22 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * Кэш состояния подписки (module-level).
+ * Avito API не поддерживает GET для проверки статуса вебхука (404),
+ * поэтому после успешного POST/DELETE сохраняем состояние здесь.
+ * При рестарте сервера сбрасывается — пользователь может нажать кнопку повторно.
+ */
+let cachedWebhookState: {
+  subscribed: boolean;
+  webhookUrl: string | null;
+  subscribedAt: string | null;
+} = {
+  subscribed: false,
+  webhookUrl: null,
+  subscribedAt: null,
+};
+
 function buildWebhookUrl(): string {
   const base = (env.PUBLIC_BASE_URL ?? "").replace(/\/+$/, "");
   if (!base) throw new Error("PUBLIC_BASE_URL не настроен — задайте публичный URL сервера");
@@ -97,11 +113,23 @@ export async function GET(req: Request) {
       diagnostics,
     });
   } catch (e: any) {
+    // Avito API не поддерживает GET для проверки статуса подписки (404).
+    // Используем кэшированное состояние после последнего POST/DELETE.
+    let webhookUrl: string | null = null;
+    try {
+      webhookUrl = buildWebhookUrl();
+    } catch {}
+
     return NextResponse.json({
-      ok: false,
-      error: String(e?.message ?? e),
-      subscribed: false,
+      ok: true,
+      subscribed: cachedWebhookState.subscribed,
+      activeSubscription: cachedWebhookState.subscribed
+        ? { url: cachedWebhookState.webhookUrl }
+        : null,
+      subscriptions: [],
+      webhookUrl,
       diagnostics,
+      note: "Статус получен из кэша — Avito API не поддерживает GET-проверку подписки",
     });
   }
 }
@@ -118,6 +146,7 @@ export async function POST(req: Request) {
   try {
     const webhookUrl = buildWebhookUrl();
     const sub = await avitoSubscribeWebhook(webhookUrl);
+    cachedWebhookState = { subscribed: true, webhookUrl, subscribedAt: new Date().toISOString() };
     return NextResponse.json({ ok: true, subscription: sub, webhookUrl });
   } catch (e: any) {
     return NextResponse.json(
@@ -138,6 +167,7 @@ export async function DELETE(req: Request) {
 
   try {
     await avitoUnsubscribeWebhook();
+    cachedWebhookState = { subscribed: false, webhookUrl: null, subscribedAt: null };
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json(
