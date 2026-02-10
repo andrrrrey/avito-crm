@@ -136,6 +136,9 @@ export default function AiAssistantPage() {
       if (j.ok) {
         setSaveMsg("Сохранено");
         mutateSettings();
+      } else if (j.error === "instructions_sync_failed") {
+        setSaveMsg(j.message || "Не удалось синхронизировать инструкцию с OpenAI");
+        mutateSettings();
       } else {
         setSaveMsg("Ошибка: " + (j.error || "неизвестная"));
       }

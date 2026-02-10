@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
+import { updateAssistantInstructions } from "@/lib/openai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,6 +68,28 @@ export async function PUT(req: Request) {
     create: { id: 1, ...data },
     update: data,
   });
+
+  // Синхронизируем instructions с OpenAI, если есть ключ и assistantId
+  if (
+    typeof instructions === "string" &&
+    settings.apiKey &&
+    settings.assistantId
+  ) {
+    try {
+      await updateAssistantInstructions(
+        settings.apiKey,
+        settings.assistantId,
+        settings.instructions,
+      );
+    } catch (e) {
+      console.error("[AI] Failed to sync instructions to OpenAI:", e);
+      return NextResponse.json({
+        ok: false,
+        error: "instructions_sync_failed",
+        message: "Настройки сохранены, но не удалось синхронизировать инструкцию с OpenAI. Проверьте API Key и Assistant ID.",
+      }, { status: 502 });
+    }
+  }
 
   return NextResponse.json({
     ok: true,
