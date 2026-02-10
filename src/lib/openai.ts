@@ -95,6 +95,16 @@ export async function getAssistantReply(
   return reply;
 }
 
+/** Получить текущие instructions ассистента со стороны OpenAI */
+export async function fetchAssistantInstructions(
+  apiKey: string,
+  assistantId: string,
+): Promise<string | null> {
+  const client = new OpenAI({ apiKey });
+  const assistant = await client.beta.assistants.retrieve(assistantId);
+  return assistant.instructions ?? null;
+}
+
 /** Обновить instructions ассистента на стороне OpenAI */
 export async function updateAssistantInstructions(
   apiKey: string,

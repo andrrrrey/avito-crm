@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
-import { updateAssistantInstructions } from "@/lib/openai";
+import { fetchAssistantInstructions, updateAssistantInstructions } from "@/lib/openai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +20,29 @@ export async function GET(req: Request) {
     });
   }
 
+  // Подтягиваем актуальные instructions с OpenAI (если есть ключ и assistantId)
+  let instructions = settings.instructions ?? "";
+  if (settings.apiKey && settings.assistantId) {
+    try {
+      const remoteInstructions = await fetchAssistantInstructions(
+        settings.apiKey,
+        settings.assistantId,
+      );
+      const remote = remoteInstructions ?? "";
+      if (remote !== instructions) {
+        // Обновляем локальную БД актуальной версией из OpenAI
+        await prisma.aiAssistant.update({
+          where: { id: 1 },
+          data: { instructions: remote || null },
+        });
+        instructions = remote;
+      }
+    } catch (e) {
+      console.error("[AI] Failed to fetch instructions from OpenAI:", e);
+      // При ошибке возвращаем локальную версию
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     data: {
@@ -28,7 +51,7 @@ export async function GET(req: Request) {
       hasApiKey: !!settings.apiKey,
       assistantId: settings.assistantId ?? "",
       vectorStoreId: settings.vectorStoreId ?? "",
-      instructions: settings.instructions ?? "",
+      instructions,
     },
   });
 }

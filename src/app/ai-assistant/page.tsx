@@ -327,6 +327,11 @@ export default function AiAssistantPage() {
             <span className="text-sm font-medium text-slate-700">
               Инструкция для ассистента
             </span>
+            {settings.hasApiKey && settings.assistantId && (
+              <span className="ml-2 text-xs text-slate-400">
+                (синхронизируется с OpenAI)
+              </span>
+            )}
             <textarea
               rows={5}
               placeholder="Вы — вежливый помощник по продажам на Avito..."
