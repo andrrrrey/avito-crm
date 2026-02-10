@@ -64,15 +64,10 @@ export async function getAssistantReply(
     content: incomingText,
   });
 
-  // Запускаем run с ассистентом
+  // Запускаем run с ассистентом (instructions синхронизированы с OpenAI при сохранении)
   const runParams: OpenAI.Beta.Threads.Runs.RunCreateParams = {
     assistant_id: settings.assistantId,
   };
-
-  // Если есть инструкция — передаём как additional_instructions
-  if (settings.instructions) {
-    runParams.additional_instructions = settings.instructions;
-  }
 
   console.log(`[AI] Starting run for thread ${threadId}, assistant ${settings.assistantId}`);
   const run = await client.beta.threads.runs.createAndPoll(threadId, runParams);
@@ -98,6 +93,18 @@ export async function getAssistantReply(
   const reply = textBlock.text.value || null;
   console.log(`[AI] Got reply for chat ${chatId}: "${(reply ?? "").slice(0, 100)}"`);
   return reply;
+}
+
+/** Обновить instructions ассистента на стороне OpenAI */
+export async function updateAssistantInstructions(
+  apiKey: string,
+  assistantId: string,
+  instructions: string | null,
+) {
+  const client = new OpenAI({ apiKey });
+  await client.beta.assistants.update(assistantId, {
+    instructions: instructions ?? "",
+  });
 }
 
 /** Список файлов в vector store */
