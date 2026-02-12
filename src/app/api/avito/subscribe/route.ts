@@ -60,14 +60,14 @@ async function getDiagnostics() {
     issues.push("AI-ассистент выключен — включите на странице /ai-assistant");
   } else {
     if (!ai.apiKey) issues.push("AI-ассистент: не задан OpenAI API ключ");
-    if (!ai.assistantId) issues.push("AI-ассистент: не задан Assistant ID");
+    if (!ai.model) issues.push("AI-ассистент: не задана модель GPT");
   }
 
   return {
     publicBaseUrl: base || null,
     hasAvitoCredentials: !!(env.AVITO_CLIENT_ID && env.AVITO_CLIENT_SECRET && env.AVITO_ACCOUNT_ID),
     aiEnabled: ai?.enabled ?? false,
-    aiConfigured: !!(ai?.enabled && ai?.apiKey && ai?.assistantId),
+    aiConfigured: !!(ai?.enabled && ai?.apiKey && ai?.model),
     issues,
     healthy: issues.length === 0,
   };

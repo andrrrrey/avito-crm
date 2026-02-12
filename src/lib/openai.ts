@@ -43,20 +43,20 @@ export async function getOpenAIClient(): Promise<OpenAI | null> {
 }
 
 /**
- * Отправить сообщение пользователя в OpenAI Assistants API и получить ответ.
- * Использует thread per chat (хранится в raw.openaiThreadId).
- * Загружает историю сообщений в новый thread для сохранения контекста.
+ * Отправить сообщение пользователя в OpenAI Responses API и получить ответ.
+ * Использует previous_response_id для сохранения контекста между вызовами.
+ * Автоматически загружает историю из БД при первом вызове.
  */
 export async function getAssistantReply(
   chatId: string,
   incomingText: string,
 ): Promise<string | null> {
   const settings = await getAiSettings();
-  if (!settings?.enabled || !settings.apiKey || !settings.assistantId) {
+  if (!settings?.enabled || !settings.apiKey || !settings.model) {
     console.log("[AI] Skip: assistant disabled or missing settings", {
       enabled: settings?.enabled,
       hasKey: !!settings?.apiKey,
-      hasAssistant: !!settings?.assistantId,
+      model: settings?.model,
     });
     return null;
   }
@@ -65,7 +65,6 @@ export async function getAssistantReply(
 
   const client = new OpenAI({ apiKey: settings.apiKey });
 
-  // Получаем или создаём thread для этого чата
   const chat = await prisma.chat.findUnique({
     where: { id: chatId },
     select: { id: true, raw: true, customerName: true, itemTitle: true, price: true },
@@ -73,53 +72,17 @@ export async function getAssistantReply(
   if (!chat) return null;
 
   const rawObj = (chat.raw && typeof chat.raw === "object") ? (chat.raw as Record<string, unknown>) : {};
-  let threadId = rawObj.openaiThreadId as string | undefined;
-
-  if (!threadId) {
-    console.log(`[AI] Creating new thread for chat ${chatId}`);
-    // Привязываем vector store к thread, чтобы file_search мог искать по файлам
-    const threadParams: OpenAI.Beta.Threads.ThreadCreateParams = {};
-    if (settings.vectorStoreId) {
-      threadParams.tool_resources = {
-        file_search: { vector_store_ids: [settings.vectorStoreId] },
-      };
-    }
-    const thread = await client.beta.threads.create(threadParams);
-    threadId = thread.id;
-
-    // Сохраняем threadId в raw
-    await prisma.chat.update({
-      where: { id: chatId },
-      data: { raw: { ...rawObj, openaiThreadId: threadId } },
-    });
-
-    // Загружаем историю предыдущих сообщений в новый thread для контекста
-    // (исключаем текущее входящее сообщение — оно будет добавлено ниже)
-    await loadChatHistoryIntoThread(client, threadId!, chatId, incomingText);
-  }
+  const previousResponseId = rawObj.openaiResponseId as string | undefined;
 
   // Собираем контекст чата для персонализации ответов
   const chatContext = buildChatContext(chat);
 
-  // Добавляем сообщение пользователя в thread
-  await client.beta.threads.messages.create(threadId, {
-    role: "user",
-    content: incomingText,
-  });
-
-  // Запускаем run с ассистентом — явно включаем file_search, если есть vector store
-  const runParams: OpenAI.Beta.Threads.Runs.RunCreateParams = {
-    assistant_id: settings.assistantId,
-  };
-
-  // Переопределяем модель, если задана в настройках
-  if (settings.model) {
-    runParams.model = settings.model;
-  }
+  // Формируем инструкции
+  let instructions = settings.instructions ?? "";
 
   if (settings.vectorStoreId) {
-    runParams.tools = [{ type: "file_search" }];
-    runParams.additional_instructions =
+    instructions +=
+      "\n\n" +
       (chatContext ? chatContext + "\n\n" : "") +
       "## Работа с базой знаний и контекстом диалога\n\n" +
       "Для КАЖДОГО сообщения клиента ты ОБЯЗАН выполнить поиск по файлам (file_search) в базе знаний.\n" +
@@ -130,8 +93,8 @@ export async function getAssistantReply(
       ESCALATE_INSTRUCTION;
     console.log(`[AI] file_search enabled, vector store: ${settings.vectorStoreId}`);
   } else {
-    // Без vector store — только контекст диалога и эскалация
-    runParams.additional_instructions =
+    instructions +=
+      "\n\n" +
       (chatContext ? chatContext + "\n\n" : "") +
       "## Контекст диалога\n\n" +
       "Учитывай контекст всего диалога: помни, о чём шла речь ранее, что клиент уже спрашивал, " +
@@ -140,32 +103,66 @@ export async function getAssistantReply(
     console.log(`[AI] WARNING: no vectorStoreId configured — file_search disabled`);
   }
 
-  console.log(`[AI] Starting run for thread ${threadId}, assistant ${settings.assistantId}`);
-  const run = await client.beta.threads.runs.createAndPoll(threadId, runParams);
-
-  if (run.status !== "completed") {
-    console.error(`[AI] Run finished with status: ${run.status}`, run.last_error);
-    return null;
+  // Формируем tools
+  const tools: OpenAI.Responses.Tool[] = [];
+  if (settings.vectorStoreId) {
+    tools.push({
+      type: "file_search",
+      vector_store_ids: [settings.vectorStoreId],
+    });
   }
 
-  console.log(`[AI] Run completed. Tools used: ${JSON.stringify(run.tools?.map(t => t.type) ?? [])}`);
+  // Формируем параметры запроса
+  const baseParams: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
+    model: settings.model,
+    instructions,
+    input: [],
+    truncation: "auto",
+  };
+  if (tools.length > 0) {
+    baseParams.tools = tools;
+  }
 
-  // Забираем последнее сообщение ассистента
-  const messages = await client.beta.threads.messages.list(threadId, {
-    order: "desc",
-    limit: 1,
+  let response: OpenAI.Responses.Response;
+
+  if (previousResponseId) {
+    // Продолжаем диалог через previous_response_id
+    try {
+      console.log(`[AI] Continuing conversation, previous_response_id: ${previousResponseId}`);
+      response = await client.responses.create({
+        ...baseParams,
+        previous_response_id: previousResponseId,
+        input: [{ role: "user", content: incomingText }],
+      });
+    } catch (e) {
+      // Если previous_response_id невалидный — fallback на полную историю
+      console.warn("[AI] previous_response_id failed, falling back to full history:", e);
+      const input = await buildInputFromHistory(chatId, incomingText);
+      response = await client.responses.create({
+        ...baseParams,
+        input,
+      });
+    }
+  } else {
+    // Новый диалог — загружаем историю из БД
+    console.log(`[AI] Starting new conversation for chat ${chatId}`);
+    const input = await buildInputFromHistory(chatId, incomingText);
+    response = await client.responses.create({
+      ...baseParams,
+      input,
+    });
+  }
+
+  // Сохраняем response ID для следующего вызова
+  await prisma.chat.update({
+    where: { id: chatId },
+    data: { raw: { ...rawObj, openaiResponseId: response.id } },
   });
 
-  const assistantMsg = messages.data[0];
-  if (!assistantMsg || assistantMsg.role !== "assistant") return null;
-
-  // Извлекаем текст
-  const textBlock = assistantMsg.content.find((c) => c.type === "text");
-  if (!textBlock || textBlock.type !== "text") return null;
-
-  // Убираем аннотации file_search вида 【4:0†source】
-  let reply = textBlock.text.value || null;
+  // Извлекаем текстовый ответ
+  let reply: string | null = response.output_text || null;
   if (reply) {
+    // Убираем аннотации file_search вида 【4:0†source】
     reply = reply.replace(/【[^】]*†[^】]*】/g, "").replace(/\s{2,}/g, " ").trim();
   }
 
@@ -173,20 +170,17 @@ export async function getAssistantReply(
   return reply || null;
 }
 
-/** Максимальное количество исторических сообщений для загрузки в новый thread */
+/** Максимальное количество исторических сообщений для загрузки */
 const MAX_HISTORY_MESSAGES = 20;
 
 /**
- * Загружает историю сообщений из БД в новый OpenAI thread.
- * Это нужно, чтобы ассистент имел контекст предыдущей переписки
- * (например, если thread был создан заново или AI был только что включён).
+ * Формирует массив input-сообщений из истории чата в БД.
+ * Используется при первом вызове (когда нет previous_response_id).
  */
-async function loadChatHistoryIntoThread(
-  client: OpenAI,
-  threadId: string,
+async function buildInputFromHistory(
   chatId: string,
   currentIncomingText: string,
-) {
+): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
   try {
     const history = await prisma.message.findMany({
       where: { chatId },
@@ -195,28 +189,35 @@ async function loadChatHistoryIntoThread(
       select: { direction: true, text: true, sentAt: true },
     });
 
-    // Исключаем последнее сообщение, если оно совпадает с текущим входящим
-    // (оно будет добавлено отдельно после вызова этой функции)
-    const filtered = history.filter((m: { direction: string; text: string }, i: number) => {
-      if (i === history.length - 1 && m.direction === "IN" && m.text.trim() === currentIncomingText.trim()) {
-        return false;
+    const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+
+    for (let i = 0; i < history.length; i++) {
+      const msg = history[i];
+      // Исключаем текущее входящее сообщение (оно будет добавлено отдельно)
+      if (
+        i === history.length - 1 &&
+        msg.direction === "IN" &&
+        msg.text.trim() === currentIncomingText.trim()
+      ) {
+        continue;
       }
-      return m.text.trim().length > 0;
-    });
+      if (msg.text.trim().length === 0) continue;
 
-    if (filtered.length === 0) return;
-
-    console.log(`[AI] Loading ${filtered.length} historical messages into thread ${threadId}`);
-
-    for (const msg of filtered) {
-      await client.beta.threads.messages.create(threadId, {
+      messages.push({
         role: msg.direction === "IN" ? "user" : "assistant",
         content: msg.text,
       });
     }
+
+    // Добавляем текущее сообщение
+    messages.push({ role: "user", content: currentIncomingText });
+
+    console.log(`[AI] Built input from history: ${messages.length} messages`);
+    return messages;
   } catch (e) {
-    // Не блокируем основной поток — история это дополнительный контекст
-    console.warn("[AI] Failed to load chat history into thread:", e);
+    console.warn("[AI] Failed to load chat history:", e);
+    // Fallback — только текущее сообщение
+    return [{ role: "user", content: currentIncomingText }];
   }
 }
 
@@ -236,38 +237,6 @@ function buildChatContext(chat: {
 
   if (parts.length === 0) return null;
   return "## Контекст текущего чата\n\n" + parts.join("\n");
-}
-
-/** Получить текущие instructions ассистента со стороны OpenAI */
-export async function fetchAssistantInstructions(
-  apiKey: string,
-  assistantId: string,
-): Promise<string | null> {
-  const client = new OpenAI({ apiKey });
-  const assistant = await client.beta.assistants.retrieve(assistantId);
-  return assistant.instructions ?? null;
-}
-
-/** Обновить instructions ассистента на стороне OpenAI и привязать vector store */
-export async function updateAssistantInstructions(
-  apiKey: string,
-  assistantId: string,
-  instructions: string | null,
-  vectorStoreId?: string | null,
-) {
-  const client = new OpenAI({ apiKey });
-  const updateParams: OpenAI.Beta.Assistants.AssistantUpdateParams = {
-    instructions: instructions ?? "",
-  };
-
-  if (vectorStoreId) {
-    updateParams.tools = [{ type: "file_search" }];
-    updateParams.tool_resources = {
-      file_search: { vector_store_ids: [vectorStoreId] },
-    };
-  }
-
-  await client.beta.assistants.update(assistantId, updateParams);
 }
 
 /** Список файлов в vector store */

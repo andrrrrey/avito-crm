@@ -2,7 +2,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
-import { fetchAssistantInstructions, updateAssistantInstructions } from "@/lib/openai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,38 +19,14 @@ export async function GET(req: Request) {
     });
   }
 
-  // Подтягиваем актуальные instructions с OpenAI (если есть ключ и assistantId)
-  let instructions = settings.instructions ?? "";
-  if (settings.apiKey && settings.assistantId) {
-    try {
-      const remoteInstructions = await fetchAssistantInstructions(
-        settings.apiKey,
-        settings.assistantId,
-      );
-      const remote = remoteInstructions ?? "";
-      if (remote !== instructions) {
-        // Обновляем локальную БД актуальной версией из OpenAI
-        await prisma.aiAssistant.update({
-          where: { id: 1 },
-          data: { instructions: remote || null },
-        });
-        instructions = remote;
-      }
-    } catch (e) {
-      console.error("[AI] Failed to fetch instructions from OpenAI:", e);
-      // При ошибке возвращаем локальную версию
-    }
-  }
-
   return NextResponse.json({
     ok: true,
     data: {
       enabled: settings.enabled,
       apiKey: settings.apiKey ? maskKey(settings.apiKey) : null,
       hasApiKey: !!settings.apiKey,
-      assistantId: settings.assistantId ?? "",
       vectorStoreId: settings.vectorStoreId ?? "",
-      instructions,
+      instructions: settings.instructions ?? "",
       model: settings.model ?? "",
     },
   });
@@ -70,13 +45,12 @@ export async function PUT(req: Request) {
     );
   }
 
-  const { enabled, apiKey, assistantId, vectorStoreId, instructions, model } = body;
+  const { enabled, apiKey, vectorStoreId, instructions, model } = body;
 
   const data: Record<string, unknown> = {};
 
   if (typeof enabled === "boolean") data.enabled = enabled;
   if (typeof apiKey === "string") data.apiKey = apiKey || null;
-  if (typeof assistantId === "string") data.assistantId = assistantId || null;
   if (typeof vectorStoreId === "string") data.vectorStoreId = vectorStoreId || null;
   if (typeof instructions === "string") data.instructions = instructions || null;
   if (typeof model === "string") data.model = model || null;
@@ -94,38 +68,12 @@ export async function PUT(req: Request) {
     update: data,
   });
 
-  // Синхронизируем instructions и vector store с OpenAI, если есть ключ и assistantId
-  // Модель НЕ синхронизируем — она применяется как per-run override при каждом запуске
-  const needSync =
-    (typeof instructions === "string" || typeof vectorStoreId === "string") &&
-    settings.apiKey &&
-    settings.assistantId;
-
-  if (needSync) {
-    try {
-      await updateAssistantInstructions(
-        settings.apiKey!,
-        settings.assistantId!,
-        settings.instructions,
-        settings.vectorStoreId,
-      );
-    } catch (e) {
-      console.error("[AI] Failed to sync assistant config to OpenAI:", e);
-      return NextResponse.json({
-        ok: false,
-        error: "instructions_sync_failed",
-        message: "Настройки сохранены, но не удалось синхронизировать конфигурацию с OpenAI. Проверьте API Key и Assistant ID.",
-      }, { status: 502 });
-    }
-  }
-
   return NextResponse.json({
     ok: true,
     data: {
       enabled: settings.enabled,
       apiKey: settings.apiKey ? maskKey(settings.apiKey) : null,
       hasApiKey: !!settings.apiKey,
-      assistantId: settings.assistantId ?? "",
       vectorStoreId: settings.vectorStoreId ?? "",
       instructions: settings.instructions ?? "",
       model: settings.model ?? "",
