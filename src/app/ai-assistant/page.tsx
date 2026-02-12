@@ -47,7 +47,6 @@ type AiSettings = {
   enabled: boolean;
   apiKey: string | null;
   hasApiKey: boolean;
-  assistantId: string;
   vectorStoreId: string;
   instructions: string;
   model: string;
@@ -76,11 +75,13 @@ export default function AiAssistantPage() {
 
   // Доступные модели GPT (для подсказок в datalist)
   const GPT_MODELS = [
-    { value: "gpt-4o", label: "GPT-4o" },
-    { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+    { value: "gpt-5.2", label: "GPT-5.2 Thinking" },
+    { value: "gpt-5.2-chat-latest", label: "GPT-5.2 Instant" },
     { value: "gpt-4.1", label: "GPT-4.1" },
     { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
     { value: "gpt-4.1-nano", label: "GPT-4.1 Nano" },
+    { value: "gpt-4o", label: "GPT-4o" },
+    { value: "gpt-4o-mini", label: "GPT-4o Mini" },
     { value: "o3-mini", label: "o3-mini" },
   ];
 
@@ -88,7 +89,6 @@ export default function AiAssistantPage() {
   const [enabled, setEnabled] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [apiKeyTouched, setApiKeyTouched] = useState(false);
-  const [assistantId, setAssistantId] = useState("");
   const [vectorStoreId, setVectorStoreId] = useState("");
   const [instructions, setInstructions] = useState("");
   const [model, setModel] = useState("");
@@ -99,7 +99,6 @@ export default function AiAssistantPage() {
   useEffect(() => {
     if (!settings) return;
     setEnabled(settings.enabled);
-    setAssistantId(settings.assistantId);
     setVectorStoreId(settings.vectorStoreId);
     setInstructions(settings.instructions);
     setModel(settings.model);
@@ -132,7 +131,6 @@ export default function AiAssistantPage() {
     try {
       const payload: Record<string, unknown> = {
         enabled,
-        assistantId,
         vectorStoreId,
         instructions,
         model,
@@ -150,9 +148,6 @@ export default function AiAssistantPage() {
       if (j.ok) {
         setSaveMsg("Сохранено");
         mutateSettings();
-      } else if (j.error === "instructions_sync_failed") {
-        setSaveMsg(j.message || "Не удалось синхронизировать инструкцию с OpenAI");
-        mutateSettings();
       } else {
         setSaveMsg("Ошибка: " + (j.error || "неизвестная"));
       }
@@ -161,7 +156,7 @@ export default function AiAssistantPage() {
     } finally {
       setSaving(false);
     }
-  }, [enabled, apiKey, apiKeyTouched, assistantId, vectorStoreId, instructions, model, mutateSettings]);
+  }, [enabled, apiKey, apiKeyTouched, vectorStoreId, instructions, model, mutateSettings]);
 
   const handleUpload = useCallback(async () => {
     const file = fileInputRef.current?.files?.[0];
@@ -237,7 +232,7 @@ export default function AiAssistantPage() {
               AI Ассистент
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Настройка ChatGPT-ассистента для ответов в чатах
+              Настройка GPT-ассистента для ответов в чатах (Responses API)
             </p>
           </div>
           <button
@@ -308,18 +303,30 @@ export default function AiAssistantPage() {
             </span>
           </label>
 
-          {/* Assistant ID */}
+          {/* Model */}
           <label className="mt-4 block">
             <span className="text-sm font-medium text-slate-700">
-              OpenAI Assistant ID
+              Модель GPT
             </span>
+            <span className="ml-1 text-xs text-rose-500">*</span>
             <input
               type="text"
-              placeholder="asst_..."
-              value={assistantId}
-              onChange={(e) => setAssistantId(e.target.value)}
+              list="gpt-models-list"
+              placeholder="Введите название модели, например: gpt-5.2"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
               className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/30"
             />
+            <datalist id="gpt-models-list">
+              {GPT_MODELS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </datalist>
+            <span className="text-xs text-slate-400">
+              Выберите из списка или введите название модели вручную
+            </span>
           </label>
 
           {/* Vector Store ID */}
@@ -336,44 +343,11 @@ export default function AiAssistantPage() {
             />
           </label>
 
-          {/* Model */}
-          <label className="mt-4 block">
-            <span className="text-sm font-medium text-slate-700">
-              Модель GPT
-            </span>
-            <span className="ml-2 text-xs text-slate-400">
-              (переопределяет модель ассистента на платформе OpenAI)
-            </span>
-            <input
-              type="text"
-              list="gpt-models-list"
-              placeholder="Оставьте пустым для модели по умолчанию"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/30"
-            />
-            <datalist id="gpt-models-list">
-              {GPT_MODELS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </datalist>
-            <span className="text-xs text-slate-400">
-              Выберите из списка или введите название модели вручную (например: gpt-4.5-preview)
-            </span>
-          </label>
-
           {/* Instructions */}
           <label className="mt-4 block">
             <span className="text-sm font-medium text-slate-700">
               Инструкция для ассистента
             </span>
-            {settings.hasApiKey && settings.assistantId && (
-              <span className="ml-2 text-xs text-slate-400">
-                (синхронизируется с OpenAI)
-              </span>
-            )}
             <textarea
               rows={5}
               placeholder="Вы — вежливый помощник по продажам на Avito..."
