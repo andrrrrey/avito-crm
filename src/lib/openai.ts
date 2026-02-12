@@ -78,6 +78,10 @@ export async function getAssistantReply(
 
   if (settings.vectorStoreId) {
     runParams.tools = [{ type: "file_search" }];
+    runParams.additional_instructions =
+      "ВАЖНО: Для КАЖДОГО сообщения клиента ты ОБЯЗАН выполнить поиск по файлам (file_search) в базе знаний. " +
+      "Никогда не отвечай по памяти или на основе предыдущих сообщений в диалоге — всегда заново ищи ответ в базе знаний. " +
+      "Если в базе знаний нет ответа на вопрос, так и скажи.";
     console.log(`[AI] file_search enabled, vector store: ${settings.vectorStoreId}`);
   } else {
     console.log(`[AI] WARNING: no vectorStoreId configured — file_search disabled`);
