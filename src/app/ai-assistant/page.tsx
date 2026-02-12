@@ -50,6 +50,7 @@ type AiSettings = {
   assistantId: string;
   vectorStoreId: string;
   instructions: string;
+  model: string;
 };
 
 type VsFile = {
@@ -73,6 +74,16 @@ export default function AiAssistantPage() {
 
   const settings = settingsData?.data;
 
+  // Доступные модели GPT (для подсказок в datalist)
+  const GPT_MODELS = [
+    { value: "gpt-4o", label: "GPT-4o" },
+    { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+    { value: "gpt-4.1", label: "GPT-4.1" },
+    { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
+    { value: "gpt-4.1-nano", label: "GPT-4.1 Nano" },
+    { value: "o3-mini", label: "o3-mini" },
+  ];
+
   // Form state
   const [enabled, setEnabled] = useState(false);
   const [apiKey, setApiKey] = useState("");
@@ -80,6 +91,7 @@ export default function AiAssistantPage() {
   const [assistantId, setAssistantId] = useState("");
   const [vectorStoreId, setVectorStoreId] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [model, setModel] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
@@ -90,6 +102,7 @@ export default function AiAssistantPage() {
     setAssistantId(settings.assistantId);
     setVectorStoreId(settings.vectorStoreId);
     setInstructions(settings.instructions);
+    setModel(settings.model);
     setApiKey("");
     setApiKeyTouched(false);
   }, [settings]);
@@ -122,6 +135,7 @@ export default function AiAssistantPage() {
         assistantId,
         vectorStoreId,
         instructions,
+        model,
       };
       if (apiKeyTouched && apiKey) {
         payload.apiKey = apiKey;
@@ -147,7 +161,7 @@ export default function AiAssistantPage() {
     } finally {
       setSaving(false);
     }
-  }, [enabled, apiKey, apiKeyTouched, assistantId, vectorStoreId, instructions, mutateSettings]);
+  }, [enabled, apiKey, apiKeyTouched, assistantId, vectorStoreId, instructions, model, mutateSettings]);
 
   const handleUpload = useCallback(async () => {
     const file = fileInputRef.current?.files?.[0];
@@ -320,6 +334,34 @@ export default function AiAssistantPage() {
               onChange={(e) => setVectorStoreId(e.target.value)}
               className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/30"
             />
+          </label>
+
+          {/* Model */}
+          <label className="mt-4 block">
+            <span className="text-sm font-medium text-slate-700">
+              Модель GPT
+            </span>
+            <span className="ml-2 text-xs text-slate-400">
+              (переопределяет модель ассистента на платформе OpenAI)
+            </span>
+            <input
+              type="text"
+              list="gpt-models-list"
+              placeholder="Оставьте пустым для модели по умолчанию"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/30"
+            />
+            <datalist id="gpt-models-list">
+              {GPT_MODELS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </datalist>
+            <span className="text-xs text-slate-400">
+              Выберите из списка или введите название модели вручную (например: gpt-4.5-preview)
+            </span>
           </label>
 
           {/* Instructions */}

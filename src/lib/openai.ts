@@ -112,6 +112,11 @@ export async function getAssistantReply(
     assistant_id: settings.assistantId,
   };
 
+  // Переопределяем модель, если задана в настройках
+  if (settings.model) {
+    runParams.model = settings.model;
+  }
+
   if (settings.vectorStoreId) {
     runParams.tools = [{ type: "file_search" }];
     runParams.additional_instructions =
@@ -243,12 +248,13 @@ export async function fetchAssistantInstructions(
   return assistant.instructions ?? null;
 }
 
-/** Обновить instructions ассистента на стороне OpenAI и привязать vector store */
+/** Обновить instructions ассистента на стороне OpenAI и привязать vector store / модель */
 export async function updateAssistantInstructions(
   apiKey: string,
   assistantId: string,
   instructions: string | null,
   vectorStoreId?: string | null,
+  model?: string | null,
 ) {
   const client = new OpenAI({ apiKey });
   const updateParams: OpenAI.Beta.Assistants.AssistantUpdateParams = {
@@ -260,6 +266,10 @@ export async function updateAssistantInstructions(
     updateParams.tool_resources = {
       file_search: { vector_store_ids: [vectorStoreId] },
     };
+  }
+
+  if (model) {
+    updateParams.model = model;
   }
 
   await client.beta.assistants.update(assistantId, updateParams);

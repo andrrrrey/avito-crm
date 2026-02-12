@@ -124,5 +124,6 @@ model AiAssistant {
   assistantId    String?
   vectorStoreId  String?
   instructions   String?
+  model          String?
   updatedAt      DateTime @updatedAt
 }
