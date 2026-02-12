@@ -52,6 +52,7 @@ export async function GET(req: Request) {
       assistantId: settings.assistantId ?? "",
       vectorStoreId: settings.vectorStoreId ?? "",
       instructions,
+      model: settings.model ?? "",
     },
   });
 }
@@ -69,7 +70,7 @@ export async function PUT(req: Request) {
     );
   }
 
-  const { enabled, apiKey, assistantId, vectorStoreId, instructions } = body;
+  const { enabled, apiKey, assistantId, vectorStoreId, instructions, model } = body;
 
   const data: Record<string, unknown> = {};
 
@@ -78,6 +79,7 @@ export async function PUT(req: Request) {
   if (typeof assistantId === "string") data.assistantId = assistantId || null;
   if (typeof vectorStoreId === "string") data.vectorStoreId = vectorStoreId || null;
   if (typeof instructions === "string") data.instructions = instructions || null;
+  if (typeof model === "string") data.model = model || null;
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json(
@@ -92,9 +94,9 @@ export async function PUT(req: Request) {
     update: data,
   });
 
-  // Синхронизируем instructions и vector store с OpenAI, если есть ключ и assistantId
+  // Синхронизируем instructions, vector store и модель с OpenAI, если есть ключ и assistantId
   const needSync =
-    (typeof instructions === "string" || typeof vectorStoreId === "string") &&
+    (typeof instructions === "string" || typeof vectorStoreId === "string" || typeof model === "string") &&
     settings.apiKey &&
     settings.assistantId;
 
@@ -105,6 +107,7 @@ export async function PUT(req: Request) {
         settings.assistantId!,
         settings.instructions,
         settings.vectorStoreId,
+        settings.model,
       );
     } catch (e) {
       console.error("[AI] Failed to sync assistant config to OpenAI:", e);
@@ -125,6 +128,7 @@ export async function PUT(req: Request) {
       assistantId: settings.assistantId ?? "",
       vectorStoreId: settings.vectorStoreId ?? "",
       instructions: settings.instructions ?? "",
+      model: settings.model ?? "",
     },
   });
 }
