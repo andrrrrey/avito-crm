@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 import { publish } from "@/lib/realtime";
 import { avitoGetChatInfo, avitoSendTextMessage, avitoGetItemInfo } from "@/lib/avito";
 import { pickFirstString, pickFirstNumber } from "@/lib/utils";
-import { getAssistantReply } from "@/lib/openai";
+import { getAssistantReply, ESCALATE_MARKER } from "@/lib/openai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -407,6 +407,14 @@ async function tryAiAssistantReply(args: {
   }
   if (!replyText) return;
 
+  // Проверяем маркер эскалации [ESCALATE]
+  const shouldEscalate = replyText.includes(ESCALATE_MARKER);
+  if (shouldEscalate) {
+    // Убираем маркер из текста, оставляем прощальное сообщение клиенту
+    replyText = replyText.replace(ESCALATE_MARKER, "").trim();
+    console.log(`[AI] Escalation triggered for chat ${args.chatId}`);
+  }
+
   // Отправляем ответ
   const sentAt = new Date();
   const rawObj = (chat.raw && typeof chat.raw === "object") ? (chat.raw as Record<string, unknown>) : {};
@@ -461,6 +469,16 @@ async function tryAiAssistantReply(args: {
       });
     }
     publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+
+    // Эскалация после отправки прощального сообщения
+    if (shouldEscalate) {
+      await prisma.chat.update({
+        where: { id: chat.id },
+        data: { status: "MANAGER" },
+      });
+      publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+      console.log(`[AI] Chat ${chat.id} escalated to MANAGER (mock mode)`);
+    }
     return;
   }
 
@@ -528,6 +546,16 @@ async function tryAiAssistantReply(args: {
     }
 
     publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+
+    // Эскалация после отправки прощального сообщения
+    if (shouldEscalate) {
+      await prisma.chat.update({
+        where: { id: chat.id },
+        data: { status: "MANAGER" },
+      });
+      publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+      console.log(`[AI] Chat ${chat.id} escalated to MANAGER`);
+    }
   } catch (e) {
     console.error("[AI] Failed to send AI reply to Avito:", e);
   }
