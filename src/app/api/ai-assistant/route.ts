@@ -94,9 +94,10 @@ export async function PUT(req: Request) {
     update: data,
   });
 
-  // Синхронизируем instructions, vector store и модель с OpenAI, если есть ключ и assistantId
+  // Синхронизируем instructions и vector store с OpenAI, если есть ключ и assistantId
+  // Модель НЕ синхронизируем — она применяется как per-run override при каждом запуске
   const needSync =
-    (typeof instructions === "string" || typeof vectorStoreId === "string" || typeof model === "string") &&
+    (typeof instructions === "string" || typeof vectorStoreId === "string") &&
     settings.apiKey &&
     settings.assistantId;
 
@@ -107,7 +108,6 @@ export async function PUT(req: Request) {
         settings.assistantId!,
         settings.instructions,
         settings.vectorStoreId,
-        settings.model,
       );
     } catch (e) {
       console.error("[AI] Failed to sync assistant config to OpenAI:", e);

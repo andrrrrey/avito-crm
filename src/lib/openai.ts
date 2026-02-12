@@ -248,13 +248,12 @@ export async function fetchAssistantInstructions(
   return assistant.instructions ?? null;
 }
 
-/** Обновить instructions ассистента на стороне OpenAI и привязать vector store / модель */
+/** Обновить instructions ассистента на стороне OpenAI и привязать vector store */
 export async function updateAssistantInstructions(
   apiKey: string,
   assistantId: string,
   instructions: string | null,
   vectorStoreId?: string | null,
-  model?: string | null,
 ) {
   const client = new OpenAI({ apiKey });
   const updateParams: OpenAI.Beta.Assistants.AssistantUpdateParams = {
@@ -266,10 +265,6 @@ export async function updateAssistantInstructions(
     updateParams.tool_resources = {
       file_search: { vector_store_ids: [vectorStoreId] },
     };
-  }
-
-  if (model) {
-    updateParams.model = model;
   }
 
   await client.beta.assistants.update(assistantId, updateParams);
