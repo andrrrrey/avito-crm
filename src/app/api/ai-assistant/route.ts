@@ -92,24 +92,26 @@ export async function PUT(req: Request) {
     update: data,
   });
 
-  // Синхронизируем instructions с OpenAI, если есть ключ и assistantId
-  if (
-    typeof instructions === "string" &&
+  // Синхронизируем instructions и vector store с OpenAI, если есть ключ и assistantId
+  const needSync =
+    (typeof instructions === "string" || typeof vectorStoreId === "string") &&
     settings.apiKey &&
-    settings.assistantId
-  ) {
+    settings.assistantId;
+
+  if (needSync) {
     try {
       await updateAssistantInstructions(
-        settings.apiKey,
-        settings.assistantId,
+        settings.apiKey!,
+        settings.assistantId!,
         settings.instructions,
+        settings.vectorStoreId,
       );
     } catch (e) {
-      console.error("[AI] Failed to sync instructions to OpenAI:", e);
+      console.error("[AI] Failed to sync assistant config to OpenAI:", e);
       return NextResponse.json({
         ok: false,
         error: "instructions_sync_failed",
-        message: "Настройки сохранены, но не удалось синхронизировать инструкцию с OpenAI. Проверьте API Key и Assistant ID.",
+        message: "Настройки сохранены, но не удалось синхронизировать конфигурацию с OpenAI. Проверьте API Key и Assistant ID.",
       }, { status: 502 });
     }
   }

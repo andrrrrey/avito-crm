@@ -105,16 +105,26 @@ export async function fetchAssistantInstructions(
   return assistant.instructions ?? null;
 }
 
-/** Обновить instructions ассистента на стороне OpenAI */
+/** Обновить instructions ассистента на стороне OpenAI и привязать vector store */
 export async function updateAssistantInstructions(
   apiKey: string,
   assistantId: string,
   instructions: string | null,
+  vectorStoreId?: string | null,
 ) {
   const client = new OpenAI({ apiKey });
-  await client.beta.assistants.update(assistantId, {
+  const updateParams: OpenAI.Beta.Assistants.AssistantUpdateParams = {
     instructions: instructions ?? "",
-  });
+  };
+
+  if (vectorStoreId) {
+    updateParams.tools = [{ type: "file_search" }];
+    updateParams.tool_resources = {
+      file_search: { vector_store_ids: [vectorStoreId] },
+    };
+  }
+
+  await client.beta.assistants.update(assistantId, updateParams);
 }
 
 /** Список файлов в vector store */
