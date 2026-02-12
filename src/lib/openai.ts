@@ -64,10 +64,20 @@ export async function getAssistantReply(
     content: incomingText,
   });
 
-  // Запускаем run с ассистентом (instructions синхронизированы с OpenAI при сохранении)
+  // Запускаем run с ассистентом — явно включаем file_search, если есть vector store
   const runParams: OpenAI.Beta.Threads.Runs.RunCreateParams = {
     assistant_id: settings.assistantId,
   };
+
+  if (settings.vectorStoreId) {
+    runParams.tools = [{ type: "file_search" }];
+    runParams.tool_resources = {
+      file_search: { vector_store_ids: [settings.vectorStoreId] },
+    };
+    console.log(`[AI] file_search enabled, vector store: ${settings.vectorStoreId}`);
+  } else {
+    console.log(`[AI] WARNING: no vectorStoreId configured — file_search disabled`);
+  }
 
   console.log(`[AI] Starting run for thread ${threadId}, assistant ${settings.assistantId}`);
   const run = await client.beta.threads.runs.createAndPoll(threadId, runParams);
@@ -76,6 +86,8 @@ export async function getAssistantReply(
     console.error(`[AI] Run finished with status: ${run.status}`, run.last_error);
     return null;
   }
+
+  console.log(`[AI] Run completed. Tools used: ${JSON.stringify(run.tools?.map(t => t.type) ?? [])}`);
 
   // Забираем последнее сообщение ассистента
   const messages = await client.beta.threads.messages.list(threadId, {
@@ -90,9 +102,14 @@ export async function getAssistantReply(
   const textBlock = assistantMsg.content.find((c) => c.type === "text");
   if (!textBlock || textBlock.type !== "text") return null;
 
-  const reply = textBlock.text.value || null;
+  // Убираем аннотации file_search вида 【4:0†source】
+  let reply = textBlock.text.value || null;
+  if (reply) {
+    reply = reply.replace(/【[^】]*†[^】]*】/g, "").replace(/\s{2,}/g, " ").trim();
+  }
+
   console.log(`[AI] Got reply for chat ${chatId}: "${(reply ?? "").slice(0, 100)}"`);
-  return reply;
+  return reply || null;
 }
 
 /** Получить текущие instructions ассистента со стороны OpenAI */
