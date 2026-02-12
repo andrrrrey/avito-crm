@@ -48,7 +48,14 @@ export async function getAssistantReply(
 
   if (!threadId) {
     console.log(`[AI] Creating new thread for chat ${chatId}`);
-    const thread = await client.beta.threads.create();
+    // Привязываем vector store к thread, чтобы file_search мог искать по файлам
+    const threadParams: OpenAI.Beta.Threads.ThreadCreateParams = {};
+    if (settings.vectorStoreId) {
+      threadParams.tool_resources = {
+        file_search: { vector_store_ids: [settings.vectorStoreId] },
+      };
+    }
+    const thread = await client.beta.threads.create(threadParams);
     threadId = thread.id;
 
     // Сохраняем threadId в raw
@@ -71,9 +78,6 @@ export async function getAssistantReply(
 
   if (settings.vectorStoreId) {
     runParams.tools = [{ type: "file_search" }];
-    runParams.tool_resources = {
-      file_search: { vector_store_ids: [settings.vectorStoreId] },
-    };
     console.log(`[AI] file_search enabled, vector store: ${settings.vectorStoreId}`);
   } else {
     console.log(`[AI] WARNING: no vectorStoreId configured — file_search disabled`);
