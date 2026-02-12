@@ -6,25 +6,25 @@ import { prisma } from "@/lib/prisma";
 export const ESCALATE_INSTRUCTION = `
 ## Перевод на менеджера
 
-Если клиент:
-- просит позвать человека, оператора, менеджера или живого сотрудника,
-- настаивает на разговоре с человеком после твоего ответа,
-- задаёт вопрос, на который ты не можешь найти ответ в базе знаний,
-- выражает сильное недовольство, жалуется или конфликтует,
-- просит решить проблему, которая требует действий менеджера (возврат, компенсация, изменение заказа и т.д.),
+Ты ОБЯЗАН добавить маркер [ESCALATE] и перевести на менеджера, если:
+- Клиент просит позвать человека, оператора, менеджера или живого сотрудника.
+- Клиент настаивает на разговоре с человеком.
+- Ты выполнил поиск по базе знаний и НЕ нашёл ответа на вопрос клиента — переводи СРАЗУ, не заставляй клиента повторять вопрос.
+- Клиент выражает сильное недовольство, жалуется или конфликтует.
+- Клиент просит решить проблему, которая требует действий менеджера (возврат, компенсация, изменение заказа, проверка статуса заказа и т.д.).
+- Ты не уверен в правильности своего ответа — лучше перевести на менеджера, чем дать неточную информацию.
 
-тогда ты ОБЯЗАН:
-1. Коротко и вежливо ответить клиенту, что переводишь его на менеджера.
-2. В самом конце своего сообщения добавить маркер [ESCALATE] на отдельной строке.
+Когда переводишь на менеджера:
+1. Коротко и вежливо сообщи клиенту, что переводишь на менеджера.
+2. В самом конце своего сообщения добавь маркер [ESCALATE] на отдельной строке.
 
-Пример ответа:
+Пример:
 "Понял, сейчас переведу вас на менеджера. Он свяжется с вами в ближайшее время!
 [ESCALATE]"
 
 ВАЖНО:
 - Маркер [ESCALATE] должен быть ПОСЛЕДНИМ в сообщении, на отдельной строке.
-- НЕ используй маркер [ESCALATE], если клиент просто задаёт вопрос, на который ты можешь ответить.
-- Если ты не уверен, попробуй сначала помочь клиенту. Если он повторно просит человека — переводи.
+- НЕ используй маркер [ESCALATE], если ты нашёл чёткий ответ в базе знаний и уверен в нём.
 `.trim();
 
 /** Маркер эскалации в ответе ассистента */
@@ -45,6 +45,7 @@ export async function getOpenAIClient(): Promise<OpenAI | null> {
 /**
  * Отправить сообщение пользователя в OpenAI Assistants API и получить ответ.
  * Использует thread per chat (хранится в raw.openaiThreadId).
+ * Загружает историю сообщений в новый thread для сохранения контекста.
  */
 export async function getAssistantReply(
   chatId: string,
@@ -67,7 +68,7 @@ export async function getAssistantReply(
   // Получаем или создаём thread для этого чата
   const chat = await prisma.chat.findUnique({
     where: { id: chatId },
-    select: { id: true, raw: true },
+    select: { id: true, raw: true, customerName: true, itemTitle: true, price: true },
   });
   if (!chat) return null;
 
@@ -91,7 +92,14 @@ export async function getAssistantReply(
       where: { id: chatId },
       data: { raw: { ...rawObj, openaiThreadId: threadId } },
     });
+
+    // Загружаем историю предыдущих сообщений в новый thread для контекста
+    // (исключаем текущее входящее сообщение — оно будет добавлено ниже)
+    await loadChatHistoryIntoThread(client, threadId!, chatId, incomingText);
   }
+
+  // Собираем контекст чата для персонализации ответов
+  const chatContext = buildChatContext(chat);
 
   // Добавляем сообщение пользователя в thread
   await client.beta.threads.messages.create(threadId, {
@@ -104,18 +112,26 @@ export async function getAssistantReply(
     assistant_id: settings.assistantId,
   };
 
-  // Всегда добавляем инструкцию про эскалацию
-  runParams.additional_instructions = ESCALATE_INSTRUCTION;
-
   if (settings.vectorStoreId) {
     runParams.tools = [{ type: "file_search" }];
     runParams.additional_instructions =
-      "ВАЖНО: Для КАЖДОГО сообщения клиента ты ОБЯЗАН выполнить поиск по файлам (file_search) в базе знаний. " +
-      "Никогда не отвечай по памяти или на основе предыдущих сообщений в диалоге — всегда заново ищи ответ в базе знаний. " +
-      "Если в базе знаний нет ответа на вопрос, так и скажи.\n\n" +
+      (chatContext ? chatContext + "\n\n" : "") +
+      "## Работа с базой знаний и контекстом диалога\n\n" +
+      "Для КАЖДОГО сообщения клиента ты ОБЯЗАН выполнить поиск по файлам (file_search) в базе знаний.\n" +
+      "При этом ты ДОЛЖЕН учитывать контекст всего диалога: помни, о чём шла речь ранее, что клиент уже спрашивал, " +
+      "какую информацию ты ему уже давал. Используй историю переписки чтобы лучше понять текущий вопрос клиента.\n" +
+      "Комбинируй информацию из базы знаний с контекстом диалога для наиболее точного и полезного ответа.\n" +
+      "Если в базе знаний нет ответа на вопрос клиента — переводи на менеджера (см. правила ниже).\n\n" +
       ESCALATE_INSTRUCTION;
     console.log(`[AI] file_search enabled, vector store: ${settings.vectorStoreId}`);
   } else {
+    // Без vector store — только контекст диалога и эскалация
+    runParams.additional_instructions =
+      (chatContext ? chatContext + "\n\n" : "") +
+      "## Контекст диалога\n\n" +
+      "Учитывай контекст всего диалога: помни, о чём шла речь ранее, что клиент уже спрашивал, " +
+      "какую информацию ты ему уже давал. Используй историю переписки для точного ответа.\n\n" +
+      ESCALATE_INSTRUCTION;
     console.log(`[AI] WARNING: no vectorStoreId configured — file_search disabled`);
   }
 
@@ -150,6 +166,71 @@ export async function getAssistantReply(
 
   console.log(`[AI] Got reply for chat ${chatId}: "${(reply ?? "").slice(0, 100)}"`);
   return reply || null;
+}
+
+/** Максимальное количество исторических сообщений для загрузки в новый thread */
+const MAX_HISTORY_MESSAGES = 20;
+
+/**
+ * Загружает историю сообщений из БД в новый OpenAI thread.
+ * Это нужно, чтобы ассистент имел контекст предыдущей переписки
+ * (например, если thread был создан заново или AI был только что включён).
+ */
+async function loadChatHistoryIntoThread(
+  client: OpenAI,
+  threadId: string,
+  chatId: string,
+  currentIncomingText: string,
+) {
+  try {
+    const history = await prisma.message.findMany({
+      where: { chatId },
+      orderBy: { sentAt: "asc" },
+      take: MAX_HISTORY_MESSAGES,
+      select: { direction: true, text: true, sentAt: true },
+    });
+
+    // Исключаем последнее сообщение, если оно совпадает с текущим входящим
+    // (оно будет добавлено отдельно после вызова этой функции)
+    const filtered = history.filter((m: { direction: string; text: string }, i: number) => {
+      if (i === history.length - 1 && m.direction === "IN" && m.text.trim() === currentIncomingText.trim()) {
+        return false;
+      }
+      return m.text.trim().length > 0;
+    });
+
+    if (filtered.length === 0) return;
+
+    console.log(`[AI] Loading ${filtered.length} historical messages into thread ${threadId}`);
+
+    for (const msg of filtered) {
+      await client.beta.threads.messages.create(threadId, {
+        role: msg.direction === "IN" ? "user" : "assistant",
+        content: msg.text,
+      });
+    }
+  } catch (e) {
+    // Не блокируем основной поток — история это дополнительный контекст
+    console.warn("[AI] Failed to load chat history into thread:", e);
+  }
+}
+
+/**
+ * Формирует контекстную информацию о чате для дополнительных инструкций.
+ * Включает имя клиента, название товара, цену — чтобы ответы были персонализированными.
+ */
+function buildChatContext(chat: {
+  customerName: string | null;
+  itemTitle: string | null;
+  price: number | null;
+}): string | null {
+  const parts: string[] = [];
+  if (chat.customerName) parts.push(`Имя клиента: ${chat.customerName}`);
+  if (chat.itemTitle) parts.push(`Товар/объявление: ${chat.itemTitle}`);
+  if (chat.price) parts.push(`Цена: ${chat.price} ₽`);
+
+  if (parts.length === 0) return null;
+  return "## Контекст текущего чата\n\n" + parts.join("\n");
 }
 
 /** Получить текущие instructions ассистента со стороны OpenAI */
