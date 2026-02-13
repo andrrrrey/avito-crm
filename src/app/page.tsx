@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import useSWR from "swr";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -240,7 +240,7 @@ function UnreadDivider() {
   );
 }
 
-function ChatCard({
+const ChatCard = React.memo(function ChatCard({
   chat,
   selected,
   onSelect,
@@ -249,8 +249,8 @@ function ChatCard({
 }: {
   chat: ChatItem;
   selected: boolean;
-  onSelect: () => void;
-  onTogglePin?: () => void;
+  onSelect: (id: string) => void;
+  onTogglePin?: (chat: ChatItem) => void;
   showPin: boolean;
 }) {
   const title = chat.itemTitle ?? "Без названия";
@@ -258,6 +258,9 @@ function ChatCard({
   const time = formatTime(chat.lastMessageAt);
   const snippet = chat.lastMessageText ?? "";
   const priceLabel = formatPrice(chat.price ?? null);
+
+  const handleSelect = useCallback(() => onSelect(chat.id), [onSelect, chat.id]);
+  const handleTogglePin = useCallback(() => onTogglePin?.(chat), [onTogglePin, chat]);
 
   return (
     <div
@@ -272,9 +275,9 @@ function ChatCard({
         <div
           role="button"
           tabIndex={0}
-          onClick={onSelect}
+          onClick={handleSelect}
           onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") onSelect();
+            if (e.key === "Enter" || e.key === " ") handleSelect();
           }}
           className="min-w-0 flex-1 outline-none"
         >
@@ -317,7 +320,7 @@ function ChatCard({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onTogglePin?.();
+                handleTogglePin();
               }}
             >
               {chat.pinned ? "📌" : "📍"}
@@ -327,9 +330,9 @@ function ChatCard({
       </div>
     </div>
   );
-}
+});
 
-function MessageBubble({
+const MessageBubble = React.memo(function MessageBubble({
   m,
   chatStatus,
 }: {
@@ -395,7 +398,7 @@ function MessageBubble({
       </div>
     </div>
   );
-}
+});
 
 function ColumnHeader({
   title,
@@ -440,6 +443,50 @@ function ColumnHeader({
             ]}
           />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function Composer({
+  onSend,
+  sending,
+}: {
+  onSend: (text: string) => void;
+  sending: boolean;
+}) {
+  const [draft, setDraft] = useState("");
+
+  const handleSend = useCallback(() => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    onSend(text);
+    setDraft("");
+  }, [draft, sending, onSend]);
+
+  return (
+    <div className="shrink-0 border-t border-slate-900/10 bg-white/55 backdrop-blur px-5 py-4">
+      <div className="flex gap-2">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={2}
+          placeholder="Написать сообщение..."
+          className="flex-1 resize-none rounded-2xl bg-white/80 ring-1 ring-slate-900/10 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/30"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+        />
+        <Button onClick={handleSend} disabled={sending || !draft.trim()}>
+          Отправить
+        </Button>
+      </div>
+      <div className="mt-2 text-[11px] text-slate-500">
+        В MOCK режиме отправка в Avito не идёт — сообщения сохраняются в БД, чтобы
+        тестировать UI/логику.
       </div>
     </div>
   );
@@ -501,13 +548,22 @@ function PageInner() {
     { refreshInterval: listRefresh, revalidateOnFocus: true }
   );
 
-  const botChats: ChatItem[] = (botData?.items ?? botData?.chats ?? []) as ChatItem[];
-  const manChats: ChatItem[] = (manData?.items ?? manData?.chats ?? []) as ChatItem[];
+  const botChats: ChatItem[] = useMemo(
+    () => (botData?.items ?? botData?.chats ?? []) as ChatItem[],
+    [botData]
+  );
+  const manChats: ChatItem[] = useMemo(
+    () => (manData?.items ?? manData?.chats ?? []) as ChatItem[],
+    [manData]
+  );
 
-  const selectedChat: ChatItem | null =
-    botChats.find((c) => c.id === selectedChatId) ??
-    manChats.find((c) => c.id === selectedChatId) ??
-    null;
+  const selectedChat: ChatItem | null = useMemo(
+    () =>
+      botChats.find((c) => c.id === selectedChatId) ??
+      manChats.find((c) => c.id === selectedChatId) ??
+      null,
+    [botChats, manChats, selectedChatId]
+  );
 
   const { data: msgData, mutate: mutateMsgs } = useSWR<any>(
     selectedChatId ? `/api/chats/${selectedChatId}/messages` : null,
@@ -836,7 +892,6 @@ function PageInner() {
     markRead(selectedChatId);
   }, [selectedChatId, rtConnected, msgItems]);
 
-  const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
 
   // ===== Webhook subscription status =====
@@ -872,29 +927,28 @@ function PageInner() {
     }
   }
 
-  async function selectChat(id: string) {
+  const selectChat = useCallback(async (id: string) => {
     const u = new URL(window.location.href);
     u.searchParams.set("chat", id);
     router.replace(u.pathname + "?" + u.searchParams.toString());
-  }
+  }, [router]);
 
-  async function togglePin(chat: ChatItem) {
+  const togglePin = useCallback(async (chat: ChatItem) => {
     await apiFetch(`/api/chats/${chat.id}/pin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pinned: !chat.pinned }),
     });
     await Promise.all([mutateBOT(), mutateMAN()]);
-  }
+  }, [mutateBOT, mutateMAN]);
 
-  async function finishDialog(chat: ChatItem) {
+  const finishDialog = useCallback(async (chat: ChatItem) => {
     await apiFetch(`/api/chats/${chat.id}/finish`, { method: "POST" });
     await Promise.all([mutateBOT(), mutateMAN()]);
-  }
+  }, [mutateBOT, mutateMAN]);
 
-  async function sendMessage() {
+  const sendMessage = useCallback(async (text: string) => {
     if (!selectedChatId) return;
-    const text = draft.trim();
     if (!text) return;
 
     setSending(true);
@@ -906,7 +960,6 @@ function PageInner() {
       });
 
       const json = await resp.json().catch(() => null);
-      setDraft("");
 
       if (json?.message) {
         const m = json.message as MessageItem;
@@ -935,7 +988,7 @@ function PageInner() {
     } finally {
       setSending(false);
     }
-  }
+  }, [selectedChatId, mutateMsgs, mutateBOT, mutateMAN]);
 
   return (
     <div className="min-h-screen flex flex-col lg:h-[100dvh] lg:overflow-hidden">
@@ -1058,7 +1111,7 @@ function PageInner() {
                     key={c.id}
                     chat={c}
                     selected={c.id === selectedChatId}
-                    onSelect={() => selectChat(c.id)}
+                    onSelect={selectChat}
                     showPin={false}
                   />
                 ))
@@ -1098,8 +1151,8 @@ function PageInner() {
                     key={c.id}
                     chat={c}
                     selected={c.id === selectedChatId}
-                    onSelect={() => selectChat(c.id)}
-                    onTogglePin={() => togglePin(c)}
+                    onSelect={selectChat}
+                    onTogglePin={togglePin}
                     showPin={true}
                   />
                 ))
@@ -1231,31 +1284,7 @@ function PageInner() {
                 </div>
 
                 {/* Composer */}
-                <div className="shrink-0 border-t border-slate-900/10 bg-white/55 backdrop-blur px-5 py-4">
-                  <div className="flex gap-2">
-                    <textarea
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      rows={2}
-                      placeholder="Написать сообщение…"
-                      className="flex-1 resize-none rounded-2xl bg-white/80 ring-1 ring-slate-900/10 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/30"
-                      onKeyDown={(e) => {
-                        // Enter отправляет, Shift+Enter перенос строки
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          if (!sending && draft.trim()) sendMessage();
-                        }
-                      }}
-                    />
-                    <Button onClick={sendMessage} disabled={sending || !draft.trim()}>
-                      Отправить
-                    </Button>
-                  </div>
-                  <div className="mt-2 text-[11px] text-slate-500">
-                    В MOCK режиме отправка в Avito не идёт — сообщения сохраняются в БД, чтобы
-                    тестировать UI/логику.
-                  </div>
-                </div>
+                <Composer onSend={sendMessage} sending={sending} />
               </div>
             )}
           </section>
