@@ -2,8 +2,8 @@
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 
-/** Инструкция для ассистента: когда переводить на менеджера */
-export const ESCALATE_INSTRUCTION = `
+/** Дефолтная инструкция для ассистента: когда переводить на менеджера */
+export const DEFAULT_ESCALATE_INSTRUCTION = `
 ## Перевод на менеджера
 
 Ты ОБЯЗАН добавить маркер [ESCALATE] и перевести на менеджера, если:
@@ -80,6 +80,9 @@ export async function getAssistantReply(
   // Формируем инструкции
   let instructions = settings.instructions ?? "";
 
+  // Используем кастомный промпт эскалации из БД, или дефолтный
+  const escalateInstruction = settings.escalatePrompt || DEFAULT_ESCALATE_INSTRUCTION;
+
   if (settings.vectorStoreId) {
     instructions +=
       "\n\n" +
@@ -90,7 +93,7 @@ export async function getAssistantReply(
       "какую информацию ты ему уже давал. Используй историю переписки чтобы лучше понять текущий вопрос клиента.\n" +
       "Комбинируй информацию из базы знаний с контекстом диалога для наиболее точного и полезного ответа.\n" +
       "Если в базе знаний нет ответа на вопрос клиента — переводи на менеджера (см. правила ниже).\n\n" +
-      ESCALATE_INSTRUCTION;
+      escalateInstruction;
     console.log(`[AI] file_search enabled, vector store: ${settings.vectorStoreId}`);
   } else {
     instructions +=
@@ -99,7 +102,7 @@ export async function getAssistantReply(
       "## Контекст диалога\n\n" +
       "Учитывай контекст всего диалога: помни, о чём шла речь ранее, что клиент уже спрашивал, " +
       "какую информацию ты ему уже давал. Используй историю переписки для точного ответа.\n\n" +
-      ESCALATE_INSTRUCTION;
+      escalateInstruction;
     console.log(`[AI] WARNING: no vectorStoreId configured — file_search disabled`);
   }
 

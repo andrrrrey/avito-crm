@@ -27,6 +27,7 @@ export async function GET(req: Request) {
       hasApiKey: !!settings.apiKey,
       vectorStoreId: settings.vectorStoreId ?? "",
       instructions: settings.instructions ?? "",
+      escalatePrompt: settings.escalatePrompt ?? "",
       model: settings.model ?? "",
     },
   });
@@ -45,7 +46,7 @@ export async function PUT(req: Request) {
     );
   }
 
-  const { enabled, apiKey, vectorStoreId, instructions, model } = body;
+  const { enabled, apiKey, vectorStoreId, instructions, escalatePrompt, model } = body;
 
   const data: Record<string, unknown> = {};
 
@@ -53,6 +54,7 @@ export async function PUT(req: Request) {
   if (typeof apiKey === "string") data.apiKey = apiKey || null;
   if (typeof vectorStoreId === "string") data.vectorStoreId = vectorStoreId || null;
   if (typeof instructions === "string") data.instructions = instructions || null;
+  if (typeof escalatePrompt === "string") data.escalatePrompt = escalatePrompt || null;
   if (typeof model === "string") data.model = model || null;
 
   if (Object.keys(data).length === 0) {
@@ -76,6 +78,7 @@ export async function PUT(req: Request) {
       hasApiKey: !!settings.apiKey,
       vectorStoreId: settings.vectorStoreId ?? "",
       instructions: settings.instructions ?? "",
+      escalatePrompt: settings.escalatePrompt ?? "",
       model: settings.model ?? "",
     },
   });
