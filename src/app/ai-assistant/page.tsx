@@ -49,6 +49,7 @@ type AiSettings = {
   hasApiKey: boolean;
   vectorStoreId: string;
   instructions: string;
+  escalatePrompt: string;
   model: string;
 };
 
@@ -91,6 +92,7 @@ export default function AiAssistantPage() {
   const [apiKeyTouched, setApiKeyTouched] = useState(false);
   const [vectorStoreId, setVectorStoreId] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [escalatePrompt, setEscalatePrompt] = useState("");
   const [model, setModel] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -101,6 +103,7 @@ export default function AiAssistantPage() {
     setEnabled(settings.enabled);
     setVectorStoreId(settings.vectorStoreId);
     setInstructions(settings.instructions);
+    setEscalatePrompt(settings.escalatePrompt);
     setModel(settings.model);
     setApiKey("");
     setApiKeyTouched(false);
@@ -133,6 +136,7 @@ export default function AiAssistantPage() {
         enabled,
         vectorStoreId,
         instructions,
+        escalatePrompt,
         model,
       };
       if (apiKeyTouched && apiKey) {
@@ -156,7 +160,7 @@ export default function AiAssistantPage() {
     } finally {
       setSaving(false);
     }
-  }, [enabled, apiKey, apiKeyTouched, vectorStoreId, instructions, model, mutateSettings]);
+  }, [enabled, apiKey, apiKeyTouched, vectorStoreId, instructions, escalatePrompt, model, mutateSettings]);
 
   const handleUpload = useCallback(async () => {
     const file = fileInputRef.current?.files?.[0];
@@ -366,6 +370,55 @@ export default function AiAssistantPage() {
             >
               {saving ? "Сохранение..." : "Сохранить"}
             </button>
+            {saveMsg && (
+              <span
+                className={cn(
+                  "text-sm",
+                  saveMsg === "Сохранено"
+                    ? "text-emerald-600"
+                    : "text-rose-600",
+                )}
+              >
+                {saveMsg}
+              </span>
+            )}
+          </div>
+        </section>
+
+        {/* ── Промпт переключения на менеджера ── */}
+        <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-900/10">
+          <h2 className="text-lg font-semibold text-slate-900 mb-1">
+            Промпт переключения на менеджера
+          </h2>
+          <p className="text-sm text-slate-500 mb-4">
+            Инструкция для ИИ, описывающая когда и как переводить диалог на менеджера.
+            Если оставить пустым — будет использоваться промпт по умолчанию.
+          </p>
+
+          <textarea
+            rows={12}
+            placeholder={`## Перевод на менеджера\n\nТы ОБЯЗАН добавить маркер [ESCALATE] и перевести на менеджера, если:\n- Клиент просит позвать человека...\n- ...`}
+            value={escalatePrompt}
+            onChange={(e) => setEscalatePrompt(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/30 resize-y font-mono leading-relaxed"
+          />
+
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              onClick={saveSettings}
+              disabled={saving}
+              className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
+            >
+              {saving ? "Сохранение..." : "Сохранить"}
+            </button>
+            {escalatePrompt && (
+              <button
+                onClick={() => setEscalatePrompt("")}
+                className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm ring-1 ring-slate-900/10 hover:bg-slate-50 transition-colors"
+              >
+                Сбросить на по умолчанию
+              </button>
+            )}
             {saveMsg && (
               <span
                 className={cn(

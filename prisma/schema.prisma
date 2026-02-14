@@ -118,12 +118,13 @@ model Session {
 
 // Настройки AI-ассистента (синглтон, id=1)
 model AiAssistant {
-  id             Int      @id @default(1)
-  enabled        Boolean  @default(false)
-  apiKey         String?
-  assistantId    String?
-  vectorStoreId  String?
-  instructions   String?
-  model          String?
-  updatedAt      DateTime @updatedAt
+  id              Int      @id @default(1)
+  enabled         Boolean  @default(false)
+  apiKey          String?
+  assistantId     String?
+  vectorStoreId   String?
+  instructions    String?
+  escalatePrompt  String?
+  model           String?
+  updatedAt       DateTime @updatedAt
 }
