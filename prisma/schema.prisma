@@ -130,3 +130,25 @@ model AiAssistant {
   model           String?
   updatedAt       DateTime @updatedAt
 }
+
+// Файлы базы знаний для DeepSeek (хранятся локально в БД)
+model KnowledgeBaseFile {
+  id        String   @id @default(cuid())
+  filename  String
+  fileSize  Int
+  mimeType  String
+  createdAt DateTime @default(now())
+
+  chunks    KnowledgeBaseChunk[]
+}
+
+// Чанки текста из файлов базы знаний
+model KnowledgeBaseChunk {
+  id         String   @id @default(cuid())
+  fileId     String
+  file       KnowledgeBaseFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  content    String
+  chunkIndex Int
+
+  @@index([fileId])
+}
