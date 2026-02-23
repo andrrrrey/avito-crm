@@ -120,7 +120,9 @@ model Session {
 model AiAssistant {
   id              Int      @id @default(1)
   enabled         Boolean  @default(false)
-  apiKey          String?
+  provider        String?  @default("openai")  // "openai" | "deepseek"
+  apiKey          String?                        // OpenAI API key
+  deepseekApiKey  String?                        // DeepSeek API key
   assistantId     String?
   vectorStoreId   String?
   instructions    String?

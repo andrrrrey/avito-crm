@@ -23,8 +23,11 @@ export async function GET(req: Request) {
     ok: true,
     data: {
       enabled: settings.enabled,
+      provider: settings.provider ?? "openai",
       apiKey: settings.apiKey ? maskKey(settings.apiKey) : null,
       hasApiKey: !!settings.apiKey,
+      deepseekApiKey: settings.deepseekApiKey ? maskKey(settings.deepseekApiKey) : null,
+      hasDeepseekApiKey: !!settings.deepseekApiKey,
       vectorStoreId: settings.vectorStoreId ?? "",
       instructions: settings.instructions ?? "",
       escalatePrompt: settings.escalatePrompt ?? "",
@@ -46,12 +49,14 @@ export async function PUT(req: Request) {
     );
   }
 
-  const { enabled, apiKey, vectorStoreId, instructions, escalatePrompt, model } = body;
+  const { enabled, provider, apiKey, deepseekApiKey, vectorStoreId, instructions, escalatePrompt, model } = body;
 
   const data: Record<string, unknown> = {};
 
   if (typeof enabled === "boolean") data.enabled = enabled;
+  if (typeof provider === "string") data.provider = provider || "openai";
   if (typeof apiKey === "string") data.apiKey = apiKey || null;
+  if (typeof deepseekApiKey === "string") data.deepseekApiKey = deepseekApiKey || null;
   if (typeof vectorStoreId === "string") data.vectorStoreId = vectorStoreId || null;
   if (typeof instructions === "string") data.instructions = instructions || null;
   if (typeof escalatePrompt === "string") data.escalatePrompt = escalatePrompt || null;
@@ -74,8 +79,11 @@ export async function PUT(req: Request) {
     ok: true,
     data: {
       enabled: settings.enabled,
+      provider: settings.provider ?? "openai",
       apiKey: settings.apiKey ? maskKey(settings.apiKey) : null,
       hasApiKey: !!settings.apiKey,
+      deepseekApiKey: settings.deepseekApiKey ? maskKey(settings.deepseekApiKey) : null,
+      hasDeepseekApiKey: !!settings.deepseekApiKey,
       vectorStoreId: settings.vectorStoreId ?? "",
       instructions: settings.instructions ?? "",
       escalatePrompt: settings.escalatePrompt ?? "",

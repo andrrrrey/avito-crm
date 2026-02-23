@@ -45,8 +45,11 @@ function formatDate(ts: number) {
 
 type AiSettings = {
   enabled: boolean;
+  provider: string;
   apiKey: string | null;
   hasApiKey: boolean;
+  deepseekApiKey: string | null;
+  hasDeepseekApiKey: boolean;
   vectorStoreId: string;
   instructions: string;
   escalatePrompt: string;
@@ -66,7 +69,6 @@ type VsFile = {
 export default function AiAssistantPage() {
   const router = useRouter();
 
-  // Settings
   const {
     data: settingsData,
     mutate: mutateSettings,
@@ -74,8 +76,8 @@ export default function AiAssistantPage() {
 
   const settings = settingsData?.data;
 
-  // Доступные модели GPT (для подсказок в datalist)
-  const GPT_MODELS = [
+  // Доступные модели по провайдеру
+  const OPENAI_MODELS = [
     { value: "gpt-5.2", label: "GPT-5.2 Thinking" },
     { value: "gpt-5.2-chat-latest", label: "GPT-5.2 Instant" },
     { value: "gpt-4.1", label: "GPT-4.1" },
@@ -86,10 +88,18 @@ export default function AiAssistantPage() {
     { value: "o3-mini", label: "o3-mini" },
   ];
 
+  const DEEPSEEK_MODELS = [
+    { value: "deepseek-chat", label: "DeepSeek Chat (V3)" },
+    { value: "deepseek-reasoner", label: "DeepSeek Reasoner (R1)" },
+  ];
+
   // Form state
   const [enabled, setEnabled] = useState(false);
+  const [provider, setProvider] = useState<"openai" | "deepseek">("openai");
   const [apiKey, setApiKey] = useState("");
   const [apiKeyTouched, setApiKeyTouched] = useState(false);
+  const [deepseekApiKey, setDeepseekApiKey] = useState("");
+  const [deepseekApiKeyTouched, setDeepseekApiKeyTouched] = useState(false);
   const [vectorStoreId, setVectorStoreId] = useState("");
   const [instructions, setInstructions] = useState("");
   const [escalatePrompt, setEscalatePrompt] = useState("");
@@ -101,16 +111,23 @@ export default function AiAssistantPage() {
   useEffect(() => {
     if (!settings) return;
     setEnabled(settings.enabled);
+    setProvider((settings.provider as "openai" | "deepseek") ?? "openai");
     setVectorStoreId(settings.vectorStoreId);
     setInstructions(settings.instructions);
     setEscalatePrompt(settings.escalatePrompt);
     setModel(settings.model);
     setApiKey("");
     setApiKeyTouched(false);
+    setDeepseekApiKey("");
+    setDeepseekApiKeyTouched(false);
   }, [settings]);
 
-  // Files
-  const hasVectorStore = !!(settings?.hasApiKey && settings?.vectorStoreId);
+  // Files — только для OpenAI
+  const hasVectorStore = !!(
+    provider === "openai" &&
+    settings?.hasApiKey &&
+    settings?.vectorStoreId
+  );
   const {
     data: filesData,
     mutate: mutateFiles,
@@ -126,6 +143,8 @@ export default function AiAssistantPage() {
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const activeModels = provider === "deepseek" ? DEEPSEEK_MODELS : OPENAI_MODELS;
+
   /* ─── handlers ──────────────────────────────────────────── */
 
   const saveSettings = useCallback(async () => {
@@ -134,6 +153,7 @@ export default function AiAssistantPage() {
     try {
       const payload: Record<string, unknown> = {
         enabled,
+        provider,
         vectorStoreId,
         instructions,
         escalatePrompt,
@@ -141,6 +161,9 @@ export default function AiAssistantPage() {
       };
       if (apiKeyTouched && apiKey) {
         payload.apiKey = apiKey;
+      }
+      if (deepseekApiKeyTouched && deepseekApiKey) {
+        payload.deepseekApiKey = deepseekApiKey;
       }
 
       const r = await apiFetch("/api/ai-assistant", {
@@ -160,7 +183,11 @@ export default function AiAssistantPage() {
     } finally {
       setSaving(false);
     }
-  }, [enabled, apiKey, apiKeyTouched, vectorStoreId, instructions, escalatePrompt, model, mutateSettings]);
+  }, [
+    enabled, provider, apiKey, apiKeyTouched,
+    deepseekApiKey, deepseekApiKeyTouched,
+    vectorStoreId, instructions, escalatePrompt, model, mutateSettings,
+  ]);
 
   const handleUpload = useCallback(async () => {
     const file = fileInputRef.current?.files?.[0];
@@ -236,7 +263,7 @@ export default function AiAssistantPage() {
               AI Ассистент
             </h1>
             <p className="text-sm text-zinc-500 mt-1">
-              Настройка GPT-ассистента для ответов в чатах (Responses API)
+              Настройка ИИ-ассистента для ответов в чатах
             </p>
           </div>
           <button
@@ -282,47 +309,113 @@ export default function AiAssistantPage() {
             </button>
           </div>
 
-          {/* API Key */}
-          <label className="mt-4 block">
-            <span className="text-sm font-medium text-zinc-700">
-              OpenAI API Key
+          {/* Провайдер API */}
+          <div className="mt-4">
+            <span className="text-sm font-medium text-zinc-700 block mb-2">
+              Провайдер API
             </span>
-            {settings.hasApiKey && !apiKeyTouched && (
-              <span className="ml-2 text-xs text-emerald-600">
-                (ключ установлен: {settings.apiKey})
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setProvider("openai")}
+                className={cn(
+                  "flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+                  provider === "openai"
+                    ? "border-sky-500 bg-sky-50 text-sky-700"
+                    : "border-zinc-300 bg-zinc-100/90 text-zinc-600 hover:bg-zinc-200/60",
+                )}
+              >
+                OpenAI
+              </button>
+              <button
+                type="button"
+                onClick={() => setProvider("deepseek")}
+                className={cn(
+                  "flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+                  provider === "deepseek"
+                    ? "border-sky-500 bg-sky-50 text-sky-700"
+                    : "border-zinc-300 bg-zinc-100/90 text-zinc-600 hover:bg-zinc-200/60",
+                )}
+              >
+                DeepSeek
+              </button>
+            </div>
+          </div>
+
+          {/* OpenAI API Key */}
+          {provider === "openai" && (
+            <label className="mt-4 block">
+              <span className="text-sm font-medium text-zinc-700">
+                OpenAI API Key
               </span>
-            )}
-            <input
-              type="password"
-              placeholder="sk-..."
-              value={apiKeyTouched ? apiKey : ""}
-              onChange={(e) => {
-                setApiKeyTouched(true);
-                setApiKey(e.target.value);
-              }}
-              className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
-            />
-            <span className="text-xs text-zinc-400">
-              Оставьте пустым, чтобы не менять
-            </span>
-          </label>
+              {settings.hasApiKey && !apiKeyTouched && (
+                <span className="ml-2 text-xs text-emerald-600">
+                  (ключ установлен: {settings.apiKey})
+                </span>
+              )}
+              <input
+                type="password"
+                placeholder="sk-..."
+                value={apiKeyTouched ? apiKey : ""}
+                onChange={(e) => {
+                  setApiKeyTouched(true);
+                  setApiKey(e.target.value);
+                }}
+                className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
+              />
+              <span className="text-xs text-zinc-400">
+                Оставьте пустым, чтобы не менять
+              </span>
+            </label>
+          )}
+
+          {/* DeepSeek API Key */}
+          {provider === "deepseek" && (
+            <label className="mt-4 block">
+              <span className="text-sm font-medium text-zinc-700">
+                DeepSeek API Key
+              </span>
+              {settings.hasDeepseekApiKey && !deepseekApiKeyTouched && (
+                <span className="ml-2 text-xs text-emerald-600">
+                  (ключ установлен: {settings.deepseekApiKey})
+                </span>
+              )}
+              <input
+                type="password"
+                placeholder="sk-..."
+                value={deepseekApiKeyTouched ? deepseekApiKey : ""}
+                onChange={(e) => {
+                  setDeepseekApiKeyTouched(true);
+                  setDeepseekApiKey(e.target.value);
+                }}
+                className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
+              />
+              <span className="text-xs text-zinc-400">
+                Получить ключ можно на platform.deepseek.com. Оставьте пустым, чтобы не менять.
+              </span>
+            </label>
+          )}
 
           {/* Model */}
           <label className="mt-4 block">
             <span className="text-sm font-medium text-zinc-700">
-              Модель GPT
+              Модель
             </span>
             <span className="ml-1 text-xs text-rose-500">*</span>
             <input
               type="text"
-              list="gpt-models-list"
-              placeholder="Введите название модели, например: gpt-5.2"
+              list="ai-models-list"
+              placeholder={
+                provider === "deepseek"
+                  ? "deepseek-chat"
+                  : "Введите название модели, например: gpt-4o"
+              }
               value={model}
               onChange={(e) => setModel(e.target.value)}
               className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
             />
-            <datalist id="gpt-models-list">
-              {GPT_MODELS.map((m) => (
+            <datalist id="ai-models-list">
+              {activeModels.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
                 </option>
@@ -333,19 +426,24 @@ export default function AiAssistantPage() {
             </span>
           </label>
 
-          {/* Vector Store ID */}
-          <label className="mt-4 block">
-            <span className="text-sm font-medium text-zinc-700">
-              Vector Store ID
-            </span>
-            <input
-              type="text"
-              placeholder="vs_..."
-              value={vectorStoreId}
-              onChange={(e) => setVectorStoreId(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
-            />
-          </label>
+          {/* Vector Store ID — только для OpenAI */}
+          {provider === "openai" && (
+            <label className="mt-4 block">
+              <span className="text-sm font-medium text-zinc-700">
+                Vector Store ID
+              </span>
+              <input
+                type="text"
+                placeholder="vs_..."
+                value={vectorStoreId}
+                onChange={(e) => setVectorStoreId(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
+              />
+              <span className="text-xs text-zinc-400">
+                ID векторного хранилища OpenAI для поиска по базе знаний
+              </span>
+            </label>
+          )}
 
           {/* Instructions */}
           <label className="mt-4 block">
@@ -434,104 +532,106 @@ export default function AiAssistantPage() {
           </div>
         </section>
 
-        {/* ── Файлы Vector Store ── */}
-        <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
-          <h2 className="text-lg font-semibold text-zinc-900 mb-4">
-            Файлы Vector Store
-          </h2>
+        {/* ── Файлы Vector Store — только для OpenAI ── */}
+        {provider === "openai" && (
+          <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+            <h2 className="text-lg font-semibold text-zinc-900 mb-4">
+              Файлы Vector Store
+            </h2>
 
-          {!hasVectorStore ? (
-            <p className="text-sm text-zinc-500">
-              Укажите API-ключ и Vector Store ID выше, чтобы управлять файлами.
-            </p>
-          ) : (
-            <>
-              {/* Upload */}
-              <div className="flex items-center gap-3 mb-4">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
-                />
-                <button
-                  onClick={handleUpload}
-                  disabled={uploading}
-                  className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
-                >
-                  {uploading ? "Загрузка..." : "Загрузить"}
-                </button>
-              </div>
-
-              {fileError && (
-                <div className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-700/10">
-                  {fileError}
+            {!hasVectorStore ? (
+              <p className="text-sm text-zinc-500">
+                Укажите OpenAI API-ключ и Vector Store ID выше, чтобы управлять файлами.
+              </p>
+            ) : (
+              <>
+                {/* Upload */}
+                <div className="flex items-center gap-3 mb-4">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
+                  />
+                  <button
+                    onClick={handleUpload}
+                    disabled={uploading}
+                    className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
+                  >
+                    {uploading ? "Загрузка..." : "Загрузить"}
+                  </button>
                 </div>
-              )}
 
-              {/* File list */}
-              {filesLoading ? (
-                <div className="text-sm text-zinc-400">Загрузка списка файлов...</div>
-              ) : files.length === 0 ? (
-                <div className="text-sm text-zinc-400">
-                  Нет файлов в Vector Store
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead>
-                      <tr className="border-b border-zinc-100 text-zinc-500">
-                        <th className="py-2 pr-4 font-medium">Имя файла</th>
-                        <th className="py-2 pr-4 font-medium">Размер</th>
-                        <th className="py-2 pr-4 font-medium">Статус</th>
-                        <th className="py-2 pr-4 font-medium">Дата</th>
-                        <th className="py-2 font-medium"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {files.map((f) => (
-                        <tr
-                          key={f.id}
-                          className="border-b border-zinc-200/70 hover:bg-zinc-200/50"
-                        >
-                          <td className="py-2 pr-4 text-zinc-700">
-                            {f.filename || f.id}
-                          </td>
-                          <td className="py-2 pr-4 text-zinc-500">
-                            {formatBytes(f.bytes)}
-                          </td>
-                          <td className="py-2 pr-4">
-                            <span
-                              className={cn(
-                                "inline-block rounded-full px-2 py-0.5 text-xs font-medium",
-                                f.status === "completed"
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : "bg-amber-50 text-amber-700",
-                              )}
-                            >
-                              {f.status}
-                            </span>
-                          </td>
-                          <td className="py-2 pr-4 text-zinc-500">
-                            {formatDate(f.created_at)}
-                          </td>
-                          <td className="py-2">
-                            <button
-                              onClick={() => handleDelete(f.id)}
-                              disabled={deletingId === f.id}
-                              className="rounded-lg px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors"
-                            >
-                              {deletingId === f.id ? "..." : "Удалить"}
-                            </button>
-                          </td>
+                {fileError && (
+                  <div className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-700/10">
+                    {fileError}
+                  </div>
+                )}
+
+                {/* File list */}
+                {filesLoading ? (
+                  <div className="text-sm text-zinc-400">Загрузка списка файлов...</div>
+                ) : files.length === 0 ? (
+                  <div className="text-sm text-zinc-400">
+                    Нет файлов в Vector Store
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead>
+                        <tr className="border-b border-zinc-100 text-zinc-500">
+                          <th className="py-2 pr-4 font-medium">Имя файла</th>
+                          <th className="py-2 pr-4 font-medium">Размер</th>
+                          <th className="py-2 pr-4 font-medium">Статус</th>
+                          <th className="py-2 pr-4 font-medium">Дата</th>
+                          <th className="py-2 font-medium"></th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          )}
-        </section>
+                      </thead>
+                      <tbody>
+                        {files.map((f) => (
+                          <tr
+                            key={f.id}
+                            className="border-b border-zinc-200/70 hover:bg-zinc-200/50"
+                          >
+                            <td className="py-2 pr-4 text-zinc-700">
+                              {f.filename || f.id}
+                            </td>
+                            <td className="py-2 pr-4 text-zinc-500">
+                              {formatBytes(f.bytes)}
+                            </td>
+                            <td className="py-2 pr-4">
+                              <span
+                                className={cn(
+                                  "inline-block rounded-full px-2 py-0.5 text-xs font-medium",
+                                  f.status === "completed"
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-amber-50 text-amber-700",
+                                )}
+                              >
+                                {f.status}
+                              </span>
+                            </td>
+                            <td className="py-2 pr-4 text-zinc-500">
+                              {formatDate(f.created_at)}
+                            </td>
+                            <td className="py-2">
+                              <button
+                                onClick={() => handleDelete(f.id)}
+                                disabled={deletingId === f.id}
+                                className="rounded-lg px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors"
+                              >
+                                {deletingId === f.id ? "..." : "Удалить"}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );
