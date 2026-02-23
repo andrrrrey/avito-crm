@@ -43,25 +43,44 @@ export async function getOpenAIClient(): Promise<OpenAI | null> {
 }
 
 /**
- * Отправить сообщение пользователя в OpenAI Responses API и получить ответ.
- * Использует previous_response_id для сохранения контекста между вызовами.
- * Автоматически загружает историю из БД при первом вызове.
+ * Отправить сообщение пользователя в AI и получить ответ.
+ * Поддерживает два провайдера: OpenAI (Responses API) и DeepSeek (Chat Completions API).
  */
 export async function getAssistantReply(
   chatId: string,
   incomingText: string,
 ): Promise<string | null> {
   const settings = await getAiSettings();
-  if (!settings?.enabled || !settings.apiKey || !settings.model) {
+  if (!settings?.enabled || !settings.model) {
     console.log("[AI] Skip: assistant disabled or missing settings", {
       enabled: settings?.enabled,
-      hasKey: !!settings?.apiKey,
       model: settings?.model,
     });
     return null;
   }
 
-  console.log(`[AI] Processing message for chat ${chatId}: "${incomingText.slice(0, 80)}"`);
+  const provider = settings.provider ?? "openai";
+
+  if (provider === "deepseek") {
+    return getDeepSeekReply(chatId, incomingText, settings);
+  }
+
+  return getOpenAIReply(chatId, incomingText, settings);
+}
+
+// ─── OpenAI (Responses API) ───────────────────────────────────────────────────
+
+async function getOpenAIReply(
+  chatId: string,
+  incomingText: string,
+  settings: NonNullable<Awaited<ReturnType<typeof getAiSettings>>>,
+): Promise<string | null> {
+  if (!settings.apiKey) {
+    console.log("[AI] Skip: OpenAI API key not set");
+    return null;
+  }
+
+  console.log(`[AI][OpenAI] Processing message for chat ${chatId}: "${incomingText.slice(0, 80)}"`);
 
   const client = new OpenAI({ apiKey: settings.apiKey });
 
@@ -74,14 +93,10 @@ export async function getAssistantReply(
   const rawObj = (chat.raw && typeof chat.raw === "object") ? (chat.raw as Record<string, unknown>) : {};
   const previousResponseId = rawObj.openaiResponseId as string | undefined;
 
-  // Собираем контекст чата для персонализации ответов
   const chatContext = buildChatContext(chat);
-
-  // Формируем инструкции
-  let instructions = settings.instructions ?? "";
-
-  // Используем кастомный промпт эскалации из БД, или дефолтный
   const escalateInstruction = settings.escalatePrompt || DEFAULT_ESCALATE_INSTRUCTION;
+
+  let instructions = settings.instructions ?? "";
 
   if (settings.vectorStoreId) {
     instructions +=
@@ -94,7 +109,7 @@ export async function getAssistantReply(
       "Комбинируй информацию из базы знаний с контекстом диалога для наиболее точного и полезного ответа.\n" +
       "Если в базе знаний нет ответа на вопрос клиента — переводи на менеджера (см. правила ниже).\n\n" +
       escalateInstruction;
-    console.log(`[AI] file_search enabled, vector store: ${settings.vectorStoreId}`);
+    console.log(`[AI][OpenAI] file_search enabled, vector store: ${settings.vectorStoreId}`);
   } else {
     instructions +=
       "\n\n" +
@@ -103,10 +118,9 @@ export async function getAssistantReply(
       "Учитывай контекст всего диалога: помни, о чём шла речь ранее, что клиент уже спрашивал, " +
       "какую информацию ты ему уже давал. Используй историю переписки для точного ответа.\n\n" +
       escalateInstruction;
-    console.log(`[AI] WARNING: no vectorStoreId configured — file_search disabled`);
+    console.log(`[AI][OpenAI] WARNING: no vectorStoreId configured — file_search disabled`);
   }
 
-  // Формируем tools
   const tools: OpenAI.Responses.Tool[] = [];
   if (settings.vectorStoreId) {
     tools.push({
@@ -115,9 +129,8 @@ export async function getAssistantReply(
     });
   }
 
-  // Формируем параметры запроса
   const baseParams: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
-    model: settings.model,
+    model: settings.model!,
     instructions,
     input: [],
     truncation: "auto",
@@ -129,17 +142,15 @@ export async function getAssistantReply(
   let response: OpenAI.Responses.Response;
 
   if (previousResponseId) {
-    // Продолжаем диалог через previous_response_id
     try {
-      console.log(`[AI] Continuing conversation, previous_response_id: ${previousResponseId}`);
+      console.log(`[AI][OpenAI] Continuing conversation, previous_response_id: ${previousResponseId}`);
       response = await client.responses.create({
         ...baseParams,
         previous_response_id: previousResponseId,
         input: [{ role: "user", content: incomingText }],
       });
     } catch (e) {
-      // Если previous_response_id невалидный — fallback на полную историю
-      console.warn("[AI] previous_response_id failed, falling back to full history:", e);
+      console.warn("[AI][OpenAI] previous_response_id failed, falling back to full history:", e);
       const input = await buildInputFromHistory(chatId, incomingText);
       response = await client.responses.create({
         ...baseParams,
@@ -147,8 +158,7 @@ export async function getAssistantReply(
       });
     }
   } else {
-    // Новый диалог — загружаем историю из БД
-    console.log(`[AI] Starting new conversation for chat ${chatId}`);
+    console.log(`[AI][OpenAI] Starting new conversation for chat ${chatId}`);
     const input = await buildInputFromHistory(chatId, incomingText);
     response = await client.responses.create({
       ...baseParams,
@@ -156,29 +166,89 @@ export async function getAssistantReply(
     });
   }
 
-  // Сохраняем response ID для следующего вызова
   await prisma.chat.update({
     where: { id: chatId },
     data: { raw: { ...rawObj, openaiResponseId: response.id } },
   });
 
-  // Извлекаем текстовый ответ
   let reply: string | null = response.output_text || null;
   if (reply) {
-    // Убираем аннотации file_search вида 【4:0†source】
     reply = reply.replace(/【[^】]*†[^】]*】/g, "").replace(/\s{2,}/g, " ").trim();
   }
 
-  console.log(`[AI] Got reply for chat ${chatId}: "${(reply ?? "").slice(0, 100)}"`);
+  console.log(`[AI][OpenAI] Got reply for chat ${chatId}: "${(reply ?? "").slice(0, 100)}"`);
   return reply || null;
 }
+
+// ─── DeepSeek (Chat Completions API) ─────────────────────────────────────────
+
+const DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1";
+
+async function getDeepSeekReply(
+  chatId: string,
+  incomingText: string,
+  settings: NonNullable<Awaited<ReturnType<typeof getAiSettings>>>,
+): Promise<string | null> {
+  if (!settings.deepseekApiKey) {
+    console.log("[AI] Skip: DeepSeek API key not set");
+    return null;
+  }
+
+  console.log(`[AI][DeepSeek] Processing message for chat ${chatId}: "${incomingText.slice(0, 80)}"`);
+
+  // DeepSeek is OpenAI-compatible — use OpenAI SDK with custom baseURL
+  const client = new OpenAI({
+    apiKey: settings.deepseekApiKey,
+    baseURL: DEEPSEEK_BASE_URL,
+  });
+
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { id: true, customerName: true, itemTitle: true, price: true },
+  });
+  if (!chat) return null;
+
+  const chatContext = buildChatContext(chat);
+  const escalateInstruction = settings.escalatePrompt || DEFAULT_ESCALATE_INSTRUCTION;
+
+  let systemContent = settings.instructions ?? "";
+  systemContent +=
+    "\n\n" +
+    (chatContext ? chatContext + "\n\n" : "") +
+    "## Контекст диалога\n\n" +
+    "Учитывай контекст всего диалога: помни, о чём шла речь ранее, что клиент уже спрашивал, " +
+    "какую информацию ты ему уже давал. Используй историю переписки для точного ответа.\n\n" +
+    escalateInstruction;
+
+  // Загружаем историю чата
+  const historyMessages = await buildInputFromHistory(chatId, incomingText);
+
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    { role: "system", content: systemContent },
+    ...historyMessages.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+  ];
+
+  const completion = await client.chat.completions.create({
+    model: settings.model!,
+    messages,
+  });
+
+  const reply = completion.choices[0]?.message?.content?.trim() ?? null;
+
+  console.log(`[AI][DeepSeek] Got reply for chat ${chatId}: "${(reply ?? "").slice(0, 100)}"`);
+  return reply || null;
+}
+
+// ─── Shared helpers ───────────────────────────────────────────────────────────
 
 /** Максимальное количество исторических сообщений для загрузки */
 const MAX_HISTORY_MESSAGES = 20;
 
 /**
  * Формирует массив input-сообщений из истории чата в БД.
- * Используется при первом вызове (когда нет previous_response_id).
  */
 async function buildInputFromHistory(
   chatId: string,
@@ -196,7 +266,6 @@ async function buildInputFromHistory(
 
     for (let i = 0; i < history.length; i++) {
       const msg = history[i];
-      // Исключаем текущее входящее сообщение (оно будет добавлено отдельно)
       if (
         i === history.length - 1 &&
         msg.direction === "IN" &&
@@ -212,21 +281,18 @@ async function buildInputFromHistory(
       });
     }
 
-    // Добавляем текущее сообщение
     messages.push({ role: "user", content: currentIncomingText });
 
     console.log(`[AI] Built input from history: ${messages.length} messages`);
     return messages;
   } catch (e) {
     console.warn("[AI] Failed to load chat history:", e);
-    // Fallback — только текущее сообщение
     return [{ role: "user", content: currentIncomingText }];
   }
 }
 
 /**
  * Формирует контекстную информацию о чате для дополнительных инструкций.
- * Включает имя клиента, название товара, цену — чтобы ответы были персонализированными.
  */
 function buildChatContext(chat: {
   customerName: string | null;
@@ -242,7 +308,7 @@ function buildChatContext(chat: {
   return "## Контекст текущего чата\n\n" + parts.join("\n");
 }
 
-/** Список файлов в vector store */
+/** Список файлов в vector store (только OpenAI) */
 export async function listVectorStoreFiles(apiKey: string, vectorStoreId: string) {
   const client = new OpenAI({ apiKey });
   const result = await client.vectorStores.files.list(vectorStoreId);
@@ -257,7 +323,6 @@ export async function listVectorStoreFiles(apiKey: string, vectorStoreId: string
   }> = [];
 
   for await (const f of result) {
-    // Получаем информацию о файле, чтобы узнать имя
     let filename: string | undefined;
     let bytes: number | undefined;
     try {
@@ -281,7 +346,7 @@ export async function listVectorStoreFiles(apiKey: string, vectorStoreId: string
   return files;
 }
 
-/** Загрузить файл в vector store */
+/** Загрузить файл в vector store (только OpenAI) */
 export async function uploadFileToVectorStore(
   apiKey: string,
   vectorStoreId: string,
@@ -289,13 +354,11 @@ export async function uploadFileToVectorStore(
 ) {
   const client = new OpenAI({ apiKey });
 
-  // Загружаем файл в OpenAI Files
   const uploaded = await client.files.create({
     file,
     purpose: "assistants",
   });
 
-  // Привязываем к vector store
   const vsFile = await client.vectorStores.files.create(vectorStoreId, {
     file_id: uploaded.id,
   });
@@ -303,7 +366,7 @@ export async function uploadFileToVectorStore(
   return { fileId: uploaded.id, vsFile };
 }
 
-/** Удалить файл из vector store (и из OpenAI Files) */
+/** Удалить файл из vector store (только OpenAI) */
 export async function deleteFileFromVectorStore(
   apiKey: string,
   vectorStoreId: string,
@@ -311,10 +374,8 @@ export async function deleteFileFromVectorStore(
 ) {
   const client = new OpenAI({ apiKey });
 
-  // Удаляем из vector store
   await client.vectorStores.files.delete(fileId, { vector_store_id: vectorStoreId });
 
-  // Удаляем сам файл из OpenAI
   try {
     await client.files.delete(fileId);
   } catch {
