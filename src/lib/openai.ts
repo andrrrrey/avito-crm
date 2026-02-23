@@ -1,6 +1,7 @@
 // src/lib/openai.ts
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
+import { buildKnowledgeContext, hasKnowledgeFiles } from "@/lib/knowledge-base";
 
 /** Дефолтная инструкция для ассистента: когда переводить на менеджера */
 export const DEFAULT_ESCALATE_INSTRUCTION = `
@@ -211,14 +212,38 @@ async function getDeepSeekReply(
   const chatContext = buildChatContext(chat);
   const escalateInstruction = settings.escalatePrompt || DEFAULT_ESCALATE_INSTRUCTION;
 
+  // Ищем релевантные чанки в локальной базе знаний
+  const kbHasFiles = await hasKnowledgeFiles();
+  const knowledgeContext = kbHasFiles
+    ? await buildKnowledgeContext(incomingText)
+    : null;
+
   let systemContent = settings.instructions ?? "";
-  systemContent +=
-    "\n\n" +
-    (chatContext ? chatContext + "\n\n" : "") +
-    "## Контекст диалога\n\n" +
-    "Учитывай контекст всего диалога: помни, о чём шла речь ранее, что клиент уже спрашивал, " +
-    "какую информацию ты ему уже давал. Используй историю переписки для точного ответа.\n\n" +
-    escalateInstruction;
+
+  if (knowledgeContext) {
+    systemContent +=
+      "\n\n" +
+      knowledgeContext +
+      "\n\n" +
+      (chatContext ? chatContext + "\n\n" : "") +
+      "## Работа с базой знаний\n\n" +
+      "Используй информацию из базы знаний выше для ответа на вопрос клиента. " +
+      "Учитывай контекст всего диалога: помни, о чём шла речь ранее. " +
+      "Если в базе знаний нет ответа на вопрос клиента — переводи на менеджера (см. правила ниже).\n\n" +
+      escalateInstruction;
+    console.log(`[AI][DeepSeek] knowledge base context injected (${knowledgeContext.length} chars)`);
+  } else {
+    systemContent +=
+      "\n\n" +
+      (chatContext ? chatContext + "\n\n" : "") +
+      "## Контекст диалога\n\n" +
+      "Учитывай контекст всего диалога: помни, о чём шла речь ранее, что клиент уже спрашивал, " +
+      "какую информацию ты ему уже давал. Используй историю переписки для точного ответа.\n\n" +
+      escalateInstruction;
+    if (kbHasFiles) {
+      console.log(`[AI][DeepSeek] knowledge base has files but no relevant chunks found for query`);
+    }
+  }
 
   // Загружаем историю чата
   const historyMessages = await buildInputFromHistory(chatId, incomingText);
