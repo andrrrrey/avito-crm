@@ -13,34 +13,34 @@ body {
 
 body {
   margin: 0;
-  color: #0f172a; /* slate-900 */
+  color: #18181b; /* zinc-900 */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* не ярко-белый фон, а молочный с нежными пятнами */
+  /* спокойный нейтральный фон без цветных “пятен” */
+  background-color: #d4d4d8; /* zinc-300 */
   background:
-    radial-gradient(1100px 650px at 12% 8%, rgba(56, 189, 248, 0.18), transparent 55%),
-    radial-gradient(900px 600px at 86% 10%, rgba(16, 185, 129, 0.14), transparent 55%),
-    radial-gradient(900px 700px at 50% 96%, rgba(244, 63, 94, 0.10), transparent 55%),
-    linear-gradient(180deg, #f8fafc 0%, #f3f4f6 60%, #eef2ff 100%);
+    radial-gradient(1200px 700px at 12% 8%, rgba(0, 0, 0, 0.06), transparent 58%),
+    radial-gradient(900px 650px at 88% 12%, rgba(0, 0, 0, 0.05), transparent 60%),
+    linear-gradient(180deg, #d4d4d8 0%, #c4c4c9 55%, #d4d4d8 100%);
 }
 
 /* выделение текста */
 ::selection {
-  background: rgba(56, 189, 248, 0.25);
+  background: rgba(14, 165, 233, 0.22); /* sky */
 }
 
 /* приятный скролл (светлый) */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(15, 23, 42, 0.25) transparent;
+  scrollbar-color: rgba(24, 24, 27, 0.22) transparent; /* zinc-900 */
 }
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 *::-webkit-scrollbar-thumb {
-  background: rgba(15, 23, 42, 0.22);
+  background: rgba(24, 24, 27, 0.20);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;

@@ -1,7 +1,15 @@
 // src/app/page.tsx
 "use client";
 
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import useSWR from "swr";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -156,6 +164,14 @@ function DangerBadge({ children }: { children: React.ReactNode }) {
   );
 }
 
+function SmallDangerBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-rose-600/10 px-1.5 py-0.5 text-[11px] font-medium text-rose-800 ring-1 ring-rose-700/20">
+      {children}
+    </span>
+  );
+}
+
 function Button({
   children,
   onClick,
@@ -172,13 +188,13 @@ function Button({
   title?: string;
 }) {
   const base =
-    "inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-sky-500/30 disabled:opacity-50 disabled:pointer-events-none";
+    "inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-sky-500/25 disabled:opacity-50 disabled:pointer-events-none";
   const styles =
     variant === "danger"
       ? "bg-rose-600/10 text-rose-800 ring-1 ring-rose-700/20 hover:bg-rose-600/15"
       : variant === "ghost"
-        ? "bg-transparent text-slate-700 hover:bg-slate-900/5 ring-1 ring-slate-900/10"
-        : "bg-white/70 text-slate-800 hover:bg-white ring-1 ring-slate-900/10 shadow-sm";
+        ? "bg-transparent text-zinc-700 hover:bg-zinc-900/5 ring-1 ring-zinc-900/10"
+        : "bg-zinc-200/70 text-zinc-800 hover:bg-zinc-200/85 ring-1 ring-zinc-900/10 shadow-sm";
   return (
     <button
       title={title}
@@ -201,7 +217,7 @@ function Segmented({
   options: Array<{ value: string; label: string }>;
 }) {
   return (
-    <div className="inline-flex rounded-xl bg-slate-900/5 ring-1 ring-slate-900/10 p-1">
+    <div className="inline-flex rounded-xl bg-zinc-900/5 ring-1 ring-zinc-900/10 p-1">
       {options.map((o) => (
         <button
           key={o.value}
@@ -209,8 +225,8 @@ function Segmented({
           className={cn(
             "px-3 py-1.5 text-xs font-medium rounded-lg transition",
             value === o.value
-              ? "bg-white/80 text-slate-900 shadow-sm ring-1 ring-slate-900/10"
-              : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+              ? "bg-zinc-200/80 text-zinc-900 shadow-sm ring-1 ring-zinc-900/10"
+              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50"
           )}
         >
           {o.label}
@@ -223,9 +239,9 @@ function Segmented({
 function DateDivider({ label }: { label: string }) {
   return (
     <div className="my-2 flex items-center gap-3">
-      <div className="h-px flex-1 bg-slate-900/10" />
-      <div className="text-[11px] text-slate-500">{label}</div>
-      <div className="h-px flex-1 bg-slate-900/10" />
+      <div className="h-px flex-1 bg-zinc-900/10" />
+      <div className="text-[11px] text-zinc-500">{label}</div>
+      <div className="h-px flex-1 bg-zinc-900/10" />
     </div>
   );
 }
@@ -233,9 +249,9 @@ function DateDivider({ label }: { label: string }) {
 function UnreadDivider() {
   return (
     <div className="my-2 flex items-center gap-3">
-      <div className="h-px flex-1 bg-slate-900/10" />
+      <div className="h-px flex-1 bg-zinc-900/10" />
       <div className="text-[11px] text-rose-700">Непрочитанные</div>
-      <div className="h-px flex-1 bg-slate-900/10" />
+      <div className="h-px flex-1 bg-zinc-900/10" />
     </div>
   );
 }
@@ -267,11 +283,11 @@ const ChatCard = React.memo(function ChatCard({
       className={cn(
         "w-full rounded-2xl transition ring-1",
         selected
-          ? "bg-white/70 ring-sky-700/25 shadow-sm"
-          : "bg-white/55 hover:bg-white/70 ring-slate-900/10"
+          ? "bg-zinc-200/80 ring-sky-700/25 shadow-sm"
+          : "bg-zinc-200/60 hover:bg-zinc-200/80 ring-zinc-900/10"
       )}
     >
-      <div className="flex items-start gap-2 p-3">
+      <div className="flex items-start gap-2 p-2">
         <div
           role="button"
           tabIndex={0}
@@ -282,32 +298,30 @@ const ChatCard = React.memo(function ChatCard({
           className="min-w-0 flex-1 outline-none"
         >
           <div className="flex items-center gap-2">
-            <div className="truncate text-sm font-semibold text-slate-900">
+            <div className="truncate text-[13px] font-semibold text-zinc-900">
               {title}
             </div>
 
             {/* ✅ цена */}
-            <span className="inline-flex items-center rounded-full bg-slate-900/5 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-900/10">
+            <span className="inline-flex items-center rounded-full bg-zinc-900/5 px-1.5 py-0.5 text-[11px] font-medium text-zinc-700 ring-1 ring-zinc-900/10">
               {priceLabel}
             </span>
 
             {chat.pinned && showPin && <Badge>PIN</Badge>}
           </div>
 
-          <div className="mt-1 flex items-center justify-between gap-2">
-            <div className="truncate text-xs text-slate-500">{name}</div>
-            <div className="shrink-0 text-xs text-slate-500">{time}</div>
+          <div className="mt-0.5 flex items-center justify-between gap-2">
+            <div className="truncate text-[11px] text-zinc-600">{name}</div>
+
+            <div className="shrink-0 flex items-center gap-2">
+              <div className="text-[11px] text-zinc-600">{time}</div>
+              {chat.unreadCount > 0 && (
+                <SmallDangerBadge>{chat.unreadCount} непроч.</SmallDangerBadge>
+              )}
+            </div>
           </div>
 
-          <div className="mt-1 flex items-center justify-end gap-2">
-            {chat.unreadCount > 0 ? (
-              <DangerBadge>{chat.unreadCount} непроч.</DangerBadge>
-            ) : (
-              <span />
-            )}
-          </div>
-
-          <div className="mt-2 line-clamp-2 text-xs text-slate-600">
+          <div className="mt-1 line-clamp-1 text-[11px] text-zinc-700">
             {snippet}
           </div>
         </div>
@@ -316,6 +330,7 @@ const ChatCard = React.memo(function ChatCard({
           <div className="shrink-0">
             <Button
               variant="ghost"
+              className="px-2 py-1 text-xs"
               title={chat.pinned ? "Открепить" : "Закрепить"}
               onClick={(e) => {
                 e.preventDefault();
@@ -360,7 +375,7 @@ const MessageBubble = React.memo(function MessageBubble({
         className={cn(
           "max-w-[78%] rounded-2xl px-3 py-2 ring-1 shadow-sm",
           isIn
-            ? "bg-white/75 text-slate-900 ring-slate-900/10"
+            ? "bg-zinc-200/75 text-zinc-900 ring-zinc-900/10"
             : isBot
               ? "bg-sky-600/10 text-sky-900 ring-sky-700/20"
               : "bg-emerald-600/10 text-emerald-900 ring-emerald-700/20",
@@ -369,7 +384,7 @@ const MessageBubble = React.memo(function MessageBubble({
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="text-[11px] font-semibold text-slate-700">
+            <div className="text-[11px] font-semibold text-zinc-700">
               {label}
             </div>
             {isUnread && (
@@ -379,7 +394,7 @@ const MessageBubble = React.memo(function MessageBubble({
             )}
           </div>
 
-          <div className="text-[11px] text-slate-500">
+          <div className="text-[11px] text-zinc-500">
             {new Date(ts).toLocaleString("ru-RU", {
               hour: "2-digit",
               minute: "2-digit",
@@ -416,12 +431,12 @@ function ColumnHeader({
   setUnreadOnly: (v: boolean) => void;
 }) {
   return (
-    <div className="z-10 bg-white/55 backdrop-blur border-b border-slate-900/10">
+    <div className="z-10 bg-zinc-200/70 backdrop-blur border-b border-zinc-900/10">
       <div className="px-3 pt-3 pb-2">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <div className="text-sm font-bold text-slate-900">{title}</div>
-            <div className="text-xs text-slate-500">{subtitle}</div>
+            <div className="text-sm font-bold text-zinc-900">{title}</div>
+            <div className="text-xs text-zinc-500">{subtitle}</div>
           </div>
         </div>
 
@@ -465,14 +480,14 @@ function Composer({
   }, [draft, sending, onSend]);
 
   return (
-    <div className="shrink-0 border-t border-slate-900/10 bg-white/55 backdrop-blur px-5 py-4">
+    <div className="shrink-0 border-t border-zinc-900/10 bg-zinc-200/70 backdrop-blur px-5 py-4">
       <div className="flex gap-2">
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={2}
           placeholder="Написать сообщение..."
-          className="flex-1 resize-none rounded-2xl bg-white/80 ring-1 ring-slate-900/10 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/30"
+          className="flex-1 resize-none rounded-2xl bg-zinc-100/90 ring-1 ring-zinc-900/10 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-sky-500/25"
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -484,7 +499,7 @@ function Composer({
           Отправить
         </Button>
       </div>
-      <div className="mt-2 text-[11px] text-slate-500">
+      <div className="mt-2 text-[11px] text-zinc-500">
         В MOCK режиме отправка в Avito не идёт — сообщения сохраняются в БД, чтобы
         тестировать UI/логику.
       </div>
@@ -496,6 +511,12 @@ function PageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const selectedChatId = sp.get("chat");
+
+  // refs for chat list scroll position (to avoid jumping to top on SWR updates)
+  const botListRef = useRef<HTMLDivElement | null>(null);
+  const manListRef = useRef<HTMLDivElement | null>(null);
+  const botListScrollTopRef = useRef(0);
+  const manListScrollTopRef = useRef(0);
 
   const [filters, setFilters] = useState<
     Record<ChatStatus, { sortOrder: SortOrder; unreadOnly: boolean }>
@@ -531,6 +552,9 @@ function PageInner() {
 
   const refreshedChatsRef = useRef<Set<string>>(new Set());
 
+  // Cache selected chat snapshot so the chat doesn't close when it drops out of a filtered list (e.g. "Непроч.")
+  const selectedChatCacheRef = useRef<Record<string, ChatItem>>({});
+
   // ✅ Даже при подключённом SSE оставляем фоновый polling как подстраховку,
   //    чтобы пропущенные события не вызывали бесконечную задержку
   const listRefresh = rtConnected ? 30_000 : 1500;
@@ -557,13 +581,64 @@ function PageInner() {
     [manData]
   );
 
-  const selectedChat: ChatItem | null = useMemo(
-    () =>
-      botChats.find((c) => c.id === selectedChatId) ??
-      manChats.find((c) => c.id === selectedChatId) ??
-      null,
-    [botChats, manChats, selectedChatId]
-  );
+  // If "Непроч." filter is enabled and we opened a chat, keep showing it in the list
+  // even if it becomes read (otherwise UI closes the chat and list item disappears).
+  const botChatsUI: ChatItem[] = useMemo(() => {
+    const base = botChats;
+    if (!filters.BOT.unreadOnly) return base;
+    if (!selectedChatId) return base;
+    const cached = selectedChatCacheRef.current[selectedChatId];
+    if (!cached || cached.status !== "BOT") return base;
+    if (base.some((c) => c.id === cached.id)) return base;
+    return [cached, ...base];
+  }, [botChats, filters.BOT.unreadOnly, selectedChatId]);
+
+  const manChatsUI: ChatItem[] = useMemo(() => {
+    const base = manChats;
+    if (!filters.MANAGER.unreadOnly) return base;
+    if (!selectedChatId) return base;
+    const cached = selectedChatCacheRef.current[selectedChatId];
+    if (!cached || cached.status !== "MANAGER") return base;
+    if (base.some((c) => c.id === cached.id)) return base;
+    return [cached, ...base];
+  }, [manChats, filters.MANAGER.unreadOnly, selectedChatId]);
+
+  const selectedChat: ChatItem | null = useMemo(() => {
+    if (!selectedChatId) return null;
+    return (
+      botChatsUI.find((c) => c.id === selectedChatId) ??
+      manChatsUI.find((c) => c.id === selectedChatId) ??
+      selectedChatCacheRef.current[selectedChatId] ??
+      null
+    );
+  }, [botChatsUI, manChatsUI, selectedChatId]);
+
+  // Keep latest snapshot of selected chat to survive filtering/unmounting.
+  useEffect(() => {
+    if (!selectedChat) return;
+    selectedChatCacheRef.current[selectedChat.id] = {
+      ...selectedChatCacheRef.current[selectedChat.id],
+      ...selectedChat,
+    };
+  }, [selectedChat]);
+
+  // Restore chat list scrollTop after list updates (prevents scrollbar jumping to top).
+  const botListKey = useMemo(() => botChatsUI.map((c) => c.id).join("|"), [botChatsUI]);
+  const manListKey = useMemo(() => manChatsUI.map((c) => c.id).join("|"), [manChatsUI]);
+
+  useLayoutEffect(() => {
+    const el = botListRef.current;
+    if (!el) return;
+    const t = botListScrollTopRef.current;
+    if (Math.abs(el.scrollTop - t) > 2) el.scrollTop = t;
+  }, [botListKey]);
+
+  useLayoutEffect(() => {
+    const el = manListRef.current;
+    if (!el) return;
+    const t = manListScrollTopRef.current;
+    if (Math.abs(el.scrollTop - t) > 2) el.scrollTop = t;
+  }, [manListKey]);
 
   const { data: msgData, mutate: mutateMsgs } = useSWR<any>(
     selectedChatId ? `/api/chats/${selectedChatId}/messages` : null,
@@ -676,6 +751,12 @@ function PageInner() {
 
     /** Мгновенное обновление SWR-кэша списка чатов из chatSnapshot */
     const applyChatSnapshot = (snapshot: ChatItem) => {
+      // Keep a local copy so selected chat can stay open even if filtered out.
+      selectedChatCacheRef.current[snapshot.id] = {
+        ...selectedChatCacheRef.current[snapshot.id],
+        ...snapshot,
+      };
+
       const mutator = snapshot.status === "BOT" ? mutateBOT : mutateMAN;
       const otherMutator = snapshot.status === "BOT" ? mutateMAN : mutateBOT;
 
@@ -869,6 +950,13 @@ function PageInner() {
 
     await apiFetch(`/api/chats/${chatId}/read`, { method: "POST" }).catch(() => null);
 
+    // Prevent "unread" filter from closing the currently opened chat
+    // and avoid re-triggering markRead on cached snapshot.
+    selectedChatCacheRef.current[chatId] = {
+      ...selectedChatCacheRef.current[chatId],
+      unreadCount: 0,
+    };
+
     await Promise.all([mutateBOT(), mutateMAN()]);
     await markMessagesReadLocally().catch(() => null);
   }
@@ -993,11 +1081,11 @@ function PageInner() {
   return (
     <div className="min-h-screen flex flex-col lg:h-[100dvh] lg:overflow-hidden">
       {/* Top bar */}
-      <div className="shrink-0 border-b border-slate-900/10 bg-white/55 backdrop-blur">
+      <div className="shrink-0 border-b border-zinc-900/10 bg-zinc-200/70 backdrop-blur">
         <div className="mx-auto max-w-[1600px] px-4 py-3 flex items-center justify-between">
           <div>
-            <div className="text-base font-bold text-slate-900">Avito CRM</div>
-            <div className="text-xs text-slate-500">
+            <div className="text-base font-bold text-zinc-900">Avito CRM</div>
+            <div className="text-xs text-zinc-500">
               Мгновенные сообщения + AI-ответы
             </div>
           </div>
@@ -1052,7 +1140,7 @@ function PageInner() {
 
             <a
               href="/ai-assistant"
-              className="inline-flex items-center rounded-xl bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-900/10 shadow-sm hover:bg-white transition"
+              className="inline-flex items-center rounded-xl bg-zinc-200/70 px-3 py-1.5 text-xs font-medium text-zinc-700 ring-1 ring-zinc-900/10 shadow-sm hover:bg-zinc-200/85 transition"
             >
               AI Ассистент
             </a>
@@ -1086,7 +1174,7 @@ function PageInner() {
       <div className="mx-auto max-w-[1600px] w-full px-4 py-4 flex-1 lg:min-h-0">
         <div className="grid gap-4 lg:grid-cols-[360px_360px_1fr] lg:h-full lg:min-h-0">
           {/* BOT column */}
-          <section className="rounded-3xl bg-white/50 ring-1 ring-slate-900/10 overflow-hidden lg:flex lg:flex-col lg:min-h-0">
+          <section className="rounded-3xl bg-zinc-200/70 ring-1 ring-zinc-900/10 overflow-hidden lg:flex lg:flex-col lg:min-h-0">
             <ColumnHeader
               title="Обработка ботом"
               subtitle="чаты, где отвечает бот"
@@ -1100,13 +1188,19 @@ function PageInner() {
               }
             />
 
-            <div className="p-3 space-y-2 lg:flex-1 lg:min-h-0 overflow-auto">
-              {botChats.length === 0 ? (
-                <div className="rounded-2xl bg-white/60 ring-1 ring-slate-900/10 p-4 text-sm text-slate-600">
+            <div
+              ref={botListRef}
+              onScroll={(e) => {
+                botListScrollTopRef.current = e.currentTarget.scrollTop;
+              }}
+              className="p-2 space-y-1.5 lg:flex-1 lg:min-h-0 overflow-auto"
+            >
+              {botChatsUI.length === 0 ? (
+                <div className="rounded-2xl bg-zinc-200/70 ring-1 ring-zinc-900/10 p-4 text-sm text-zinc-600">
                   Тут пока пусто
                 </div>
               ) : (
-                botChats.map((c) => (
+                botChatsUI.map((c) => (
                   <ChatCard
                     key={c.id}
                     chat={c}
@@ -1120,7 +1214,7 @@ function PageInner() {
           </section>
 
           {/* MANAGER column */}
-          <section className="rounded-3xl bg-white/50 ring-1 ring-slate-900/10 overflow-hidden lg:flex lg:flex-col lg:min-h-0">
+          <section className="rounded-3xl bg-zinc-200/70 ring-1 ring-zinc-900/10 overflow-hidden lg:flex lg:flex-col lg:min-h-0">
             <ColumnHeader
               title="Переведен на менеджера"
               subtitle="чаты для оператора + закрепы"
@@ -1140,13 +1234,19 @@ function PageInner() {
               }
             />
 
-            <div className="p-3 space-y-2 lg:flex-1 lg:min-h-0 overflow-auto">
-              {manChats.length === 0 ? (
-                <div className="rounded-2xl bg-white/60 ring-1 ring-slate-900/10 p-4 text-sm text-slate-600">
+            <div
+              ref={manListRef}
+              onScroll={(e) => {
+                manListScrollTopRef.current = e.currentTarget.scrollTop;
+              }}
+              className="p-2 space-y-1.5 lg:flex-1 lg:min-h-0 overflow-auto"
+            >
+              {manChatsUI.length === 0 ? (
+                <div className="rounded-2xl bg-zinc-200/70 ring-1 ring-zinc-900/10 p-4 text-sm text-zinc-600">
                   Тут пока пусто
                 </div>
               ) : (
-                manChats.map((c) => (
+                manChatsUI.map((c) => (
                   <ChatCard
                     key={c.id}
                     chat={c}
@@ -1161,12 +1261,12 @@ function PageInner() {
           </section>
 
           {/* Chat panel */}
-          <section className="rounded-3xl bg-white/50 ring-1 ring-slate-900/10 overflow-hidden lg:flex lg:flex-col lg:min-h-0 min-h-[520px]">
+          <section className="rounded-3xl bg-zinc-200/70 ring-1 ring-zinc-900/10 overflow-hidden lg:flex lg:flex-col lg:min-h-0 min-h-[520px]">
             {!selectedChat ? (
               <div className="p-6 flex-1 lg:min-h-0 flex items-center justify-center">
-                <div className="max-w-md rounded-3xl bg-white/60 ring-1 ring-slate-900/10 p-6 shadow-sm">
-                  <div className="text-lg font-bold text-slate-900">Выбери чат</div>
-                  <div className="mt-2 text-sm text-slate-600">
+                <div className="max-w-md rounded-3xl bg-zinc-100/85 ring-1 ring-zinc-900/10 p-6 shadow-sm">
+                  <div className="text-lg font-bold text-zinc-900">Выбери чат</div>
+                  <div className="mt-2 text-sm text-zinc-600">
                     Слева две колонки. Нажми на чат — справа откроется переписка.
                   </div>
                 </div>
@@ -1174,11 +1274,11 @@ function PageInner() {
             ) : (
               <div className="flex flex-col flex-1 lg:min-h-0">
                 {/* Chat header */}
-                <div className="shrink-0 border-b border-slate-900/10 bg-white/55 backdrop-blur px-5 py-4">
+                <div className="shrink-0 border-b border-zinc-900/10 bg-zinc-200/70 backdrop-blur px-5 py-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <div className="truncate text-base font-bold text-slate-900">
+                        <div className="truncate text-base font-bold text-zinc-900">
                           {selectedChat.itemTitle ?? "Без названия"}
                         </div>
                         <Badge>{selectedChat.status}</Badge>
@@ -1187,10 +1287,10 @@ function PageInner() {
                         )}
                       </div>
 
-                      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
                         <div>
                           Клиент:{" "}
-                          <span className="text-slate-800">
+                          <span className="text-zinc-800">
                             {selectedChat.customerName ?? "—"}
                           </span>
                         </div>
@@ -1198,7 +1298,7 @@ function PageInner() {
                         {/* ✅ цена */}
                         <div>
                           Цена:{" "}
-                          <span className="text-slate-800">
+                          <span className="text-zinc-800">
                             {formatPrice(selectedChat.price ?? null)}
                           </span>
                         </div>
@@ -1240,13 +1340,13 @@ function PageInner() {
                 <div
                   ref={messagesRef}
                   onScroll={handleScroll}
-                  className="relative flex-1 min-h-0 overflow-auto px-5 py-4 space-y-3 bg-gradient-to-b from-white/30 to-white/10"
+                  className="relative flex-1 min-h-0 overflow-auto px-5 py-4 space-y-3 bg-gradient-to-b from-zinc-200/60 to-zinc-200/35"
                 >
                   {refreshing && (
                     <div className="sticky top-0 z-10 -mx-5 px-5 pb-2">
-                      <div className="rounded-2xl bg-white/70 ring-1 ring-slate-900/10 px-3 py-2 text-xs text-slate-700 flex items-center justify-between shadow-sm">
+                      <div className="rounded-2xl bg-zinc-100/85 ring-1 ring-zinc-900/10 px-3 py-2 text-xs text-zinc-700 flex items-center justify-between shadow-sm">
                         <span>Подгружаю историю из Avito…</span>
-                        <span className="text-slate-500">refresh=1</span>
+                        <span className="text-zinc-500">refresh=1</span>
                       </div>
                     </div>
                   )}
@@ -1298,7 +1398,7 @@ export default function Page() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center text-slate-500">
+        <div className="min-h-screen flex items-center justify-center text-zinc-500">
           Loading…
         </div>
       }

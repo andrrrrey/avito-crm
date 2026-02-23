@@ -221,7 +221,7 @@ export default function AiAssistantPage() {
   if (!settings) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-slate-400">Загрузка...</div>
+        <div className="text-zinc-400">Загрузка...</div>
       </div>
     );
   }
@@ -232,34 +232,34 @@ export default function AiAssistantPage() {
       <div className="mx-auto max-w-2xl">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">
+            <h1 className="text-2xl font-bold text-zinc-900">
               AI Ассистент
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-zinc-500 mt-1">
               Настройка GPT-ассистента для ответов в чатах (Responses API)
             </p>
           </div>
           <button
             onClick={() => router.push("/")}
-            className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-slate-900/10 hover:bg-slate-50"
+            className="rounded-xl bg-zinc-200/80 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-900/10 hover:bg-zinc-200/90"
           >
             Назад к чатам
           </button>
         </div>
 
         {/* ── Основные настройки ── */}
-        <section className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-900/10">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">
+        <section className="rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+          <h2 className="text-lg font-semibold text-zinc-900 mb-4">
             Основные настройки
           </h2>
 
           {/* Переключатель вкл/выкл */}
-          <div className="flex items-center justify-between py-3 border-b border-slate-100">
+          <div className="flex items-center justify-between py-3 border-b border-zinc-100">
             <div>
-              <div className="text-sm font-medium text-slate-700">
+              <div className="text-sm font-medium text-zinc-700">
                 Ассистент включён
               </div>
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-zinc-500">
                 Когда включено, ассистент будет отвечать в чатах со статусом BOT
               </div>
             </div>
@@ -270,12 +270,12 @@ export default function AiAssistantPage() {
               onClick={() => setEnabled(!enabled)}
               className={cn(
                 "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-                enabled ? "bg-sky-600" : "bg-slate-200",
+                enabled ? "bg-sky-600" : "bg-zinc-200",
               )}
             >
               <span
                 className={cn(
-                  "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform",
+                  "pointer-events-none inline-block h-5 w-5 rounded-full bg-zinc-100 shadow-sm ring-0 transition-transform",
                   enabled ? "translate-x-5" : "translate-x-0",
                 )}
               />
@@ -284,7 +284,7 @@ export default function AiAssistantPage() {
 
           {/* API Key */}
           <label className="mt-4 block">
-            <span className="text-sm font-medium text-slate-700">
+            <span className="text-sm font-medium text-zinc-700">
               OpenAI API Key
             </span>
             {settings.hasApiKey && !apiKeyTouched && (
@@ -300,16 +300,16 @@ export default function AiAssistantPage() {
                 setApiKeyTouched(true);
                 setApiKey(e.target.value);
               }}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/30"
+              className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
             />
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-zinc-400">
               Оставьте пустым, чтобы не менять
             </span>
           </label>
 
           {/* Model */}
           <label className="mt-4 block">
-            <span className="text-sm font-medium text-slate-700">
+            <span className="text-sm font-medium text-zinc-700">
               Модель GPT
             </span>
             <span className="ml-1 text-xs text-rose-500">*</span>
@@ -319,7 +319,7 @@ export default function AiAssistantPage() {
               placeholder="Введите название модели, например: gpt-5.2"
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/30"
+              className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
             />
             <datalist id="gpt-models-list">
               {GPT_MODELS.map((m) => (
@@ -328,14 +328,14 @@ export default function AiAssistantPage() {
                 </option>
               ))}
             </datalist>
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-zinc-400">
               Выберите из списка или введите название модели вручную
             </span>
           </label>
 
           {/* Vector Store ID */}
           <label className="mt-4 block">
-            <span className="text-sm font-medium text-slate-700">
+            <span className="text-sm font-medium text-zinc-700">
               Vector Store ID
             </span>
             <input
@@ -343,13 +343,13 @@ export default function AiAssistantPage() {
               placeholder="vs_..."
               value={vectorStoreId}
               onChange={(e) => setVectorStoreId(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/30"
+              className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
             />
           </label>
 
           {/* Instructions */}
           <label className="mt-4 block">
-            <span className="text-sm font-medium text-slate-700">
+            <span className="text-sm font-medium text-zinc-700">
               Инструкция для ассистента
             </span>
             <textarea
@@ -357,7 +357,7 @@ export default function AiAssistantPage() {
               placeholder="Вы — вежливый помощник по продажам на Avito..."
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/30 resize-y"
+              className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25 resize-y"
             />
           </label>
 
@@ -386,11 +386,11 @@ export default function AiAssistantPage() {
         </section>
 
         {/* ── Промпт переключения на менеджера ── */}
-        <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-900/10">
-          <h2 className="text-lg font-semibold text-slate-900 mb-1">
+        <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+          <h2 className="text-lg font-semibold text-zinc-900 mb-1">
             Промпт переключения на менеджера
           </h2>
-          <p className="text-sm text-slate-500 mb-4">
+          <p className="text-sm text-zinc-500 mb-4">
             Инструкция для ИИ, описывающая когда и как переводить диалог на менеджера.
             Если оставить пустым — будет использоваться промпт по умолчанию.
           </p>
@@ -400,7 +400,7 @@ export default function AiAssistantPage() {
             placeholder={`## Перевод на менеджера\n\nТы ОБЯЗАН добавить маркер [ESCALATE] и перевести на менеджера, если:\n- Клиент просит позвать человека...\n- ...`}
             value={escalatePrompt}
             onChange={(e) => setEscalatePrompt(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/30 resize-y font-mono leading-relaxed"
+            className="w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25 resize-y font-mono leading-relaxed"
           />
 
           <div className="mt-3 flex items-center gap-3">
@@ -414,7 +414,7 @@ export default function AiAssistantPage() {
             {escalatePrompt && (
               <button
                 onClick={() => setEscalatePrompt("")}
-                className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm ring-1 ring-slate-900/10 hover:bg-slate-50 transition-colors"
+                className="rounded-xl bg-zinc-200/80 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-900/10 hover:bg-zinc-200/90 transition-colors"
               >
                 Сбросить на по умолчанию
               </button>
@@ -435,13 +435,13 @@ export default function AiAssistantPage() {
         </section>
 
         {/* ── Файлы Vector Store ── */}
-        <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-900/10">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">
+        <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+          <h2 className="text-lg font-semibold text-zinc-900 mb-4">
             Файлы Vector Store
           </h2>
 
           {!hasVectorStore ? (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-zinc-500">
               Укажите API-ключ и Vector Store ID выше, чтобы управлять файлами.
             </p>
           ) : (
@@ -451,7 +451,7 @@ export default function AiAssistantPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  className="text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
+                  className="text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
                 />
                 <button
                   onClick={handleUpload}
@@ -470,16 +470,16 @@ export default function AiAssistantPage() {
 
               {/* File list */}
               {filesLoading ? (
-                <div className="text-sm text-slate-400">Загрузка списка файлов...</div>
+                <div className="text-sm text-zinc-400">Загрузка списка файлов...</div>
               ) : files.length === 0 ? (
-                <div className="text-sm text-slate-400">
+                <div className="text-sm text-zinc-400">
                   Нет файлов в Vector Store
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left">
                     <thead>
-                      <tr className="border-b border-slate-100 text-slate-500">
+                      <tr className="border-b border-zinc-100 text-zinc-500">
                         <th className="py-2 pr-4 font-medium">Имя файла</th>
                         <th className="py-2 pr-4 font-medium">Размер</th>
                         <th className="py-2 pr-4 font-medium">Статус</th>
@@ -491,12 +491,12 @@ export default function AiAssistantPage() {
                       {files.map((f) => (
                         <tr
                           key={f.id}
-                          className="border-b border-slate-50 hover:bg-slate-50/50"
+                          className="border-b border-zinc-200/70 hover:bg-zinc-200/50"
                         >
-                          <td className="py-2 pr-4 text-slate-700">
+                          <td className="py-2 pr-4 text-zinc-700">
                             {f.filename || f.id}
                           </td>
-                          <td className="py-2 pr-4 text-slate-500">
+                          <td className="py-2 pr-4 text-zinc-500">
                             {formatBytes(f.bytes)}
                           </td>
                           <td className="py-2 pr-4">
@@ -511,7 +511,7 @@ export default function AiAssistantPage() {
                               {f.status}
                             </span>
                           </td>
-                          <td className="py-2 pr-4 text-slate-500">
+                          <td className="py-2 pr-4 text-zinc-500">
                             {formatDate(f.created_at)}
                           </td>
                           <td className="py-2">

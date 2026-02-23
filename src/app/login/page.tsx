@@ -41,31 +41,31 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+    <div className="min-h-screen flex items-center justify-center bg-transparent p-6">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-900/10"
+        className="w-full max-w-sm rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10"
       >
-        <div className="text-xl font-semibold text-slate-900">Вход в CRM</div>
-        <div className="mt-1 text-sm text-slate-500">Введите логин и пароль сотрудника</div>
+        <div className="text-xl font-semibold text-zinc-900">Вход в CRM</div>
+        <div className="mt-1 text-sm text-zinc-500">Введите логин и пароль сотрудника</div>
 
-        <label className="mt-5 block text-sm font-medium text-slate-700">
+        <label className="mt-5 block text-sm font-medium text-zinc-700">
           Логин
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/30"
+            className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
             autoComplete="username"
           />
         </label>
 
-        <label className="mt-3 block text-sm font-medium text-slate-700">
+        <label className="mt-3 block text-sm font-medium text-zinc-700">
           Пароль
           <input
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             type="password"
-            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/30"
+            className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
             autoComplete="current-password"
           />
         </label>
@@ -78,12 +78,12 @@ export default function LoginPage() {
 
         <button
           disabled={loading || !username.trim() || !password}
-          className="mt-5 w-full rounded-xl bg-sky-600 px-3 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50"
+          className="mt-5 w-full rounded-xl bg-sky-700 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-800 disabled:opacity-50"
         >
           {loading ? "Входим..." : "Войти"}
         </button>
 
-        <div className="mt-4 text-xs text-slate-500">
+        <div className="mt-4 text-xs text-zinc-500">
           Если не пускает — проверь, что пользователь есть в БД и <code>isActive=true</code>.
         </div>
       </form>
