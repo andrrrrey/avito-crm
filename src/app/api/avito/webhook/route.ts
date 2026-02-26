@@ -708,6 +708,21 @@ export async function POST(req: Request) {
           patch.raw = { ...prevRaw, itemId: hints.itemId };
         }
 
+        // Если клиент написал в INACTIVE чат — реактивируем в BOT
+        if (chat.status === "INACTIVE" && direction === "IN") {
+          patch.status = "BOT";
+          patch.followupSentAt = null;
+          const rawForReactivation = patch.raw ?? prevRaw;
+          patch.raw = {
+            ...rawForReactivation,
+            reactivated: {
+              at: new Date().toISOString(),
+              reason: "client_message",
+              previousStatus: "INACTIVE",
+            },
+          };
+        }
+
         if (Object.keys(patch).length) {
           chat = await tx.chat.update({
             where: { id: chat.id },
