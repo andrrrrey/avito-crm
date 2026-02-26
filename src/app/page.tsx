@@ -421,25 +421,21 @@ function ColumnHeader({
   subtitle,
   sortOrder,
   unreadOnly,
-  priceMin,
-  priceMax,
+  priceSort,
   showUnreadFilter,
   setSortOrder,
   setUnreadOnly,
-  setPriceMin,
-  setPriceMax,
+  setPriceSort,
 }: {
   title: string;
   subtitle: string;
   sortOrder: SortOrder;
   unreadOnly: boolean;
-  priceMin: string;
-  priceMax: string;
+  priceSort: "" | "asc" | "desc";
   showUnreadFilter?: boolean;
   setSortOrder: (v: SortOrder) => void;
   setUnreadOnly: (v: boolean) => void;
-  setPriceMin: (v: string) => void;
-  setPriceMax: (v: string) => void;
+  setPriceSort: (v: "" | "asc" | "desc") => void;
 }) {
   return (
     <div className="z-10 bg-zinc-200/70 backdrop-blur border-b border-zinc-900/10">
@@ -472,33 +468,41 @@ function ColumnHeader({
           )}
         </div>
 
-        {/* Фильтр по цене */}
+        {/* Сортировка по цене */}
         <div className="mt-2 flex items-center gap-1.5">
           <span className="text-[11px] text-zinc-500 shrink-0">Цена ₽:</span>
-          <input
-            type="number"
-            placeholder="от"
-            value={priceMin}
-            onChange={(e) => setPriceMin(e.target.value)}
-            className="w-20 rounded-lg bg-zinc-100/90 ring-1 ring-zinc-900/10 px-2 py-1 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-sky-500/25"
-          />
-          <span className="text-[11px] text-zinc-400">—</span>
-          <input
-            type="number"
-            placeholder="до"
-            value={priceMax}
-            onChange={(e) => setPriceMax(e.target.value)}
-            className="w-20 rounded-lg bg-zinc-100/90 ring-1 ring-zinc-900/10 px-2 py-1 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-sky-500/25"
-          />
-          {(priceMin || priceMax) && (
+          <div className="inline-flex rounded-xl bg-zinc-900/5 ring-1 ring-zinc-900/10 p-1 gap-0.5">
             <button
-              onClick={() => { setPriceMin(""); setPriceMax(""); }}
-              className="text-[11px] text-zinc-500 hover:text-zinc-700 px-1"
-              title="Сбросить фильтр цены"
+              onClick={() => setPriceSort(priceSort === "desc" ? "" : "desc")}
+              className={cn(
+                "px-2 py-1 text-xs font-medium rounded-lg transition",
+                priceSort === "desc"
+                  ? "bg-zinc-200/80 text-zinc-900 shadow-sm ring-1 ring-zinc-900/10"
+                  : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50"
+              )}
             >
-              ✕
+              Сначала дороже
             </button>
-          )}
+            <button
+              onClick={() => setPriceSort(priceSort === "asc" ? "" : "asc")}
+              className={cn(
+                "px-2 py-1 text-xs font-medium rounded-lg transition",
+                priceSort === "asc"
+                  ? "bg-zinc-200/80 text-zinc-900 shadow-sm ring-1 ring-zinc-900/10"
+                  : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50"
+              )}
+            >
+              Сначала дешевле
+            </button>
+            {priceSort && (
+              <button
+                onClick={() => setPriceSort("")}
+                className="px-2 py-1 text-xs font-medium rounded-lg transition text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200/50"
+              >
+                Сбросить
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -561,23 +565,26 @@ function PageInner() {
   const manListScrollTopRef = useRef(0);
 
   const [filters, setFilters] = useState<
-    Record<ChatStatus, { sortOrder: SortOrder; unreadOnly: boolean; priceMin: string; priceMax: string }>
+    Record<ChatStatus, { sortOrder: SortOrder; unreadOnly: boolean; priceSort: "" | "asc" | "desc" }>
   >({
-    BOT: { sortOrder: "desc", unreadOnly: false, priceMin: "", priceMax: "" },
-    MANAGER: { sortOrder: "desc", unreadOnly: false, priceMin: "", priceMax: "" },
-    INACTIVE: { sortOrder: "desc", unreadOnly: false, priceMin: "", priceMax: "" },
+    BOT: { sortOrder: "desc", unreadOnly: false, priceSort: "" },
+    MANAGER: { sortOrder: "desc", unreadOnly: false, priceSort: "" },
+    INACTIVE: { sortOrder: "desc", unreadOnly: false, priceSort: "" },
   });
 
   const qsBOT = useMemo(() => {
     const f = filters.BOT;
     const u = new URLSearchParams();
     u.set("status", "BOT");
-    u.set("sortField", "lastMessageAt");
-    u.set("sortOrder", f.sortOrder);
+    if (f.priceSort) {
+      u.set("sortField", "price");
+      u.set("sortOrder", f.priceSort);
+    } else {
+      u.set("sortField", "lastMessageAt");
+      u.set("sortOrder", f.sortOrder);
+    }
     u.set("limit", "5000");
     if (f.unreadOnly) u.set("unreadOnly", "1");
-    if (f.priceMin) u.set("priceMin", f.priceMin);
-    if (f.priceMax) u.set("priceMax", f.priceMax);
     return u.toString();
   }, [filters.BOT]);
 
@@ -585,12 +592,15 @@ function PageInner() {
     const f = filters.MANAGER;
     const u = new URLSearchParams();
     u.set("status", "MANAGER");
-    u.set("sortField", "lastMessageAt");
-    u.set("sortOrder", f.sortOrder);
+    if (f.priceSort) {
+      u.set("sortField", "price");
+      u.set("sortOrder", f.priceSort);
+    } else {
+      u.set("sortField", "lastMessageAt");
+      u.set("sortOrder", f.sortOrder);
+    }
     u.set("limit", "5000");
     if (f.unreadOnly) u.set("unreadOnly", "1");
-    if (f.priceMin) u.set("priceMin", f.priceMin);
-    if (f.priceMax) u.set("priceMax", f.priceMax);
     return u.toString();
   }, [filters.MANAGER]);
 
@@ -598,11 +608,14 @@ function PageInner() {
     const f = filters.INACTIVE;
     const u = new URLSearchParams();
     u.set("status", "INACTIVE");
-    u.set("sortField", "lastMessageAt");
-    u.set("sortOrder", f.sortOrder);
+    if (f.priceSort) {
+      u.set("sortField", "price");
+      u.set("sortOrder", f.priceSort);
+    } else {
+      u.set("sortField", "lastMessageAt");
+      u.set("sortOrder", f.sortOrder);
+    }
     u.set("limit", "5000");
-    if (f.priceMin) u.set("priceMin", f.priceMin);
-    if (f.priceMax) u.set("priceMax", f.priceMax);
     return u.toString();
   }, [filters.INACTIVE]);
 
@@ -1253,6 +1266,62 @@ function PageInner() {
       {/* Main area */}
       <div className="mx-auto max-w-[1800px] w-full px-4 py-4 flex-1 lg:min-h-0">
         <div className="grid gap-4 lg:grid-cols-[320px_320px_320px_1fr] lg:h-full lg:min-h-0">
+          {/* INACTIVE column */}
+          <section className="rounded-3xl bg-amber-50/70 ring-1 ring-amber-900/15 overflow-hidden lg:flex lg:flex-col lg:min-h-0">
+            <ColumnHeader
+              title="Неактивные сделки"
+              subtitle="нет ответа после дожима бота"
+              sortOrder={filters.INACTIVE.sortOrder}
+              unreadOnly={filters.INACTIVE.unreadOnly}
+              priceSort={filters.INACTIVE.priceSort}
+              showUnreadFilter={false}
+              setSortOrder={(v) =>
+                setFilters((p) => ({
+                  ...p,
+                  INACTIVE: { ...p.INACTIVE, sortOrder: v },
+                }))
+              }
+              setUnreadOnly={(v) =>
+                setFilters((p) => ({
+                  ...p,
+                  INACTIVE: { ...p.INACTIVE, unreadOnly: v },
+                }))
+              }
+              setPriceSort={(v) =>
+                setFilters((p) => ({ ...p, INACTIVE: { ...p.INACTIVE, priceSort: v } }))
+              }
+            />
+
+            <div className="p-2 space-y-1.5 lg:flex-1 lg:min-h-0 overflow-auto">
+              {inactiveChats.length === 0 ? (
+                <div className="rounded-2xl bg-amber-50/70 ring-1 ring-amber-900/10 p-4 text-sm text-zinc-600">
+                  Неактивных сделок нет
+                </div>
+              ) : (
+                inactiveChats.map((c) => (
+                  <div key={c.id} className="relative group">
+                    <ChatCard
+                      chat={c}
+                      selected={c.id === selectedChatId}
+                      onSelect={selectChat}
+                      showPin={false}
+                    />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        reactivateChat(c);
+                      }}
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition inline-flex items-center rounded-lg bg-emerald-600/10 px-2 py-0.5 text-[11px] font-medium text-emerald-800 ring-1 ring-emerald-700/20 hover:bg-emerald-600/20"
+                      title="Вернуть в работу (BOT)"
+                    >
+                      Реактивировать
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
           {/* BOT column */}
           <section className="rounded-3xl bg-zinc-200/70 ring-1 ring-zinc-900/10 overflow-hidden lg:flex lg:flex-col lg:min-h-0">
             <ColumnHeader
@@ -1260,19 +1329,15 @@ function PageInner() {
               subtitle="чаты, где отвечает бот"
               sortOrder={filters.BOT.sortOrder}
               unreadOnly={filters.BOT.unreadOnly}
-              priceMin={filters.BOT.priceMin}
-              priceMax={filters.BOT.priceMax}
+              priceSort={filters.BOT.priceSort}
               setSortOrder={(v) =>
                 setFilters((p) => ({ ...p, BOT: { ...p.BOT, sortOrder: v } }))
               }
               setUnreadOnly={(v) =>
                 setFilters((p) => ({ ...p, BOT: { ...p.BOT, unreadOnly: v } }))
               }
-              setPriceMin={(v) =>
-                setFilters((p) => ({ ...p, BOT: { ...p.BOT, priceMin: v } }))
-              }
-              setPriceMax={(v) =>
-                setFilters((p) => ({ ...p, BOT: { ...p.BOT, priceMax: v } }))
+              setPriceSort={(v) =>
+                setFilters((p) => ({ ...p, BOT: { ...p.BOT, priceSort: v } }))
               }
             />
 
@@ -1308,8 +1373,7 @@ function PageInner() {
               subtitle="чаты для оператора + закрепы"
               sortOrder={filters.MANAGER.sortOrder}
               unreadOnly={filters.MANAGER.unreadOnly}
-              priceMin={filters.MANAGER.priceMin}
-              priceMax={filters.MANAGER.priceMax}
+              priceSort={filters.MANAGER.priceSort}
               setSortOrder={(v) =>
                 setFilters((p) => ({
                   ...p,
@@ -1322,11 +1386,8 @@ function PageInner() {
                   MANAGER: { ...p.MANAGER, unreadOnly: v },
                 }))
               }
-              setPriceMin={(v) =>
-                setFilters((p) => ({ ...p, MANAGER: { ...p.MANAGER, priceMin: v } }))
-              }
-              setPriceMax={(v) =>
-                setFilters((p) => ({ ...p, MANAGER: { ...p.MANAGER, priceMax: v } }))
+              setPriceSort={(v) =>
+                setFilters((p) => ({ ...p, MANAGER: { ...p.MANAGER, priceSort: v } }))
               }
             />
 
@@ -1351,66 +1412,6 @@ function PageInner() {
                     onTogglePin={togglePin}
                     showPin={true}
                   />
-                ))
-              )}
-            </div>
-          </section>
-
-          {/* INACTIVE column */}
-          <section className="rounded-3xl bg-amber-50/70 ring-1 ring-amber-900/15 overflow-hidden lg:flex lg:flex-col lg:min-h-0">
-            <ColumnHeader
-              title="Неактивные сделки"
-              subtitle="нет ответа после дожима бота"
-              sortOrder={filters.INACTIVE.sortOrder}
-              unreadOnly={filters.INACTIVE.unreadOnly}
-              priceMin={filters.INACTIVE.priceMin}
-              priceMax={filters.INACTIVE.priceMax}
-              showUnreadFilter={false}
-              setSortOrder={(v) =>
-                setFilters((p) => ({
-                  ...p,
-                  INACTIVE: { ...p.INACTIVE, sortOrder: v },
-                }))
-              }
-              setUnreadOnly={(v) =>
-                setFilters((p) => ({
-                  ...p,
-                  INACTIVE: { ...p.INACTIVE, unreadOnly: v },
-                }))
-              }
-              setPriceMin={(v) =>
-                setFilters((p) => ({ ...p, INACTIVE: { ...p.INACTIVE, priceMin: v } }))
-              }
-              setPriceMax={(v) =>
-                setFilters((p) => ({ ...p, INACTIVE: { ...p.INACTIVE, priceMax: v } }))
-              }
-            />
-
-            <div className="p-2 space-y-1.5 lg:flex-1 lg:min-h-0 overflow-auto">
-              {inactiveChats.length === 0 ? (
-                <div className="rounded-2xl bg-amber-50/70 ring-1 ring-amber-900/10 p-4 text-sm text-zinc-600">
-                  Неактивных сделок нет
-                </div>
-              ) : (
-                inactiveChats.map((c) => (
-                  <div key={c.id} className="relative group">
-                    <ChatCard
-                      chat={c}
-                      selected={c.id === selectedChatId}
-                      onSelect={selectChat}
-                      showPin={false}
-                    />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        reactivateChat(c);
-                      }}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition inline-flex items-center rounded-lg bg-emerald-600/10 px-2 py-0.5 text-[11px] font-medium text-emerald-800 ring-1 ring-emerald-700/20 hover:bg-emerald-600/20"
-                      title="Вернуть в работу (BOT)"
-                    >
-                      Реактивировать
-                    </button>
-                  </div>
                 ))
               )}
             </div>
