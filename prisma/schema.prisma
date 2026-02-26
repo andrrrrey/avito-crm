@@ -10,6 +10,7 @@ datasource db {
 enum ChatStatus {
   BOT
   MANAGER
+  INACTIVE
 }
 
 enum MessageDirection {
@@ -37,6 +38,9 @@ model Chat {
 
   lastMessageAt   DateTime?
   lastMessageText String?
+
+  // Дожим бота: когда был отправлен вопрос "актуален ли заказ"
+  followupSentAt  DateTime?
 
   unreadCount     Int @default(0)
 
