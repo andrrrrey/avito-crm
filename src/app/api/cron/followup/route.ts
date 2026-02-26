@@ -19,7 +19,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Текст дожима
-const FOLLOWUP_TEXT = "Здравствуйте! Актуален ли ваш заказ? Ждём вашего ответа.";
+const FOLLOWUP_TEXT = "Актуален ли ваш заказ?";
 
 // Таймауты
 const FOLLOWUP_DELAY_MS = 60 * 60 * 1000;     // 1 час без ответа → дожим
