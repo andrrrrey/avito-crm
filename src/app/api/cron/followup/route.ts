@@ -1,7 +1,8 @@
 // src/app/api/cron/followup/route.ts
 //
-// Дожимы бота: если клиент не отвечает 1 час — бот спрашивает "актуален ли заказ".
-// Если после дожима нет ответа ещё 1 час — чат переводится в INACTIVE.
+// Дожимы бота: если бот написал клиенту, а клиент не отвечает 1 час —
+// бот пишет сообщение-напоминание (только в чаты с ИИ ботом, без менеджера).
+// Если после дожима нет ответа в течение суток — чат переводится в INACTIVE.
 //
 // Запускать по крону: POST /api/cron/followup?token=<CRM_CRON_TOKEN>
 // (каждые 5–10 минут)
@@ -22,7 +23,7 @@ const FOLLOWUP_TEXT = "Здравствуйте! Актуален ли ваш з
 
 // Таймауты
 const FOLLOWUP_DELAY_MS = 60 * 60 * 1000; // 1 час без ответа → дожим
-const INACTIVE_DELAY_MS = 60 * 60 * 1000; // 1 час после дожима → INACTIVE
+const INACTIVE_DELAY_MS = 24 * 60 * 60 * 1000; // 24 часа после дожима → INACTIVE
 
 export async function POST(req: Request) {
   const guard = requireCronToken(req);
@@ -62,9 +63,10 @@ export async function POST(req: Request) {
   });
 
   for (const chat of chatsForFollowup) {
-    // Дожим только если последнее сообщение — от клиента (IN)
+    // Дожим только если последнее сообщение — от бота (OUT):
+    // бот уже ответил клиенту, но клиент не написал в ответ.
     const lastMsg = chat.messages[0];
-    if (!lastMsg || lastMsg.direction !== "IN") continue;
+    if (!lastMsg || lastMsg.direction !== "OUT") continue;
 
     try {
       const sentAt = new Date();
