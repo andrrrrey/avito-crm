@@ -22,7 +22,8 @@ export const dynamic = "force-dynamic";
 const FOLLOWUP_TEXT = "Здравствуйте! Актуален ли ваш заказ? Ждём вашего ответа.";
 
 // Таймауты
-const FOLLOWUP_DELAY_MS = 60 * 60 * 1000; // 1 час без ответа → дожим
+const FOLLOWUP_DELAY_MS = 60 * 60 * 1000;     // 1 час без ответа → дожим
+const FOLLOWUP_MAX_AGE_MS = 2 * 60 * 60 * 1000; // дожим только если чат не старее 2 часов
 const INACTIVE_DELAY_MS = 24 * 60 * 60 * 1000; // 24 часа после дожима → INACTIVE
 
 export async function POST(req: Request) {
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
 
   const now = new Date();
   const followupThreshold = new Date(now.getTime() - FOLLOWUP_DELAY_MS);
+  const followupMaxAgeThreshold = new Date(now.getTime() - FOLLOWUP_MAX_AGE_MS);
   const inactiveThreshold = new Date(now.getTime() - INACTIVE_DELAY_MS);
 
   const stats = {
@@ -42,12 +44,12 @@ export async function POST(req: Request) {
   // ─── Шаг 1: Дожим ───────────────────────────────────────────────────────────
   // Ищем BOT-чаты, где:
   // - followupSentAt IS NULL (дожим ещё не отправлялся)
-  // - lastMessageAt < 1 часа назад
+  // - lastMessageAt от 1 до 2 часов назад (чат "свежий", но клиент не ответил)
   const chatsForFollowup = await prisma.chat.findMany({
     where: {
       status: "BOT",
       followupSentAt: null,
-      lastMessageAt: { lt: followupThreshold },
+      lastMessageAt: { lt: followupThreshold, gt: followupMaxAgeThreshold },
     },
     select: {
       id: true,
