@@ -16,7 +16,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-type ChatStatus = "BOT" | "MANAGER";
+type ChatStatus = "BOT" | "MANAGER" | "INACTIVE";
 type SortOrder = "asc" | "desc";
 
 type ChatItem = {
@@ -34,6 +34,7 @@ type ChatItem = {
   chatUrl: string | null;
   unreadCount: number;
   pinned: boolean;
+  followupSentAt?: string | null;
 };
 
 type MessageItem = {
@@ -420,15 +421,25 @@ function ColumnHeader({
   subtitle,
   sortOrder,
   unreadOnly,
+  priceMin,
+  priceMax,
+  showUnreadFilter,
   setSortOrder,
   setUnreadOnly,
+  setPriceMin,
+  setPriceMax,
 }: {
   title: string;
   subtitle: string;
   sortOrder: SortOrder;
   unreadOnly: boolean;
+  priceMin: string;
+  priceMax: string;
+  showUnreadFilter?: boolean;
   setSortOrder: (v: SortOrder) => void;
   setUnreadOnly: (v: boolean) => void;
+  setPriceMin: (v: string) => void;
+  setPriceMax: (v: string) => void;
 }) {
   return (
     <div className="z-10 bg-zinc-200/70 backdrop-blur border-b border-zinc-900/10">
@@ -449,14 +460,45 @@ function ColumnHeader({
               { value: "asc", label: "Сначала старые" },
             ]}
           />
-          <Segmented
-            value={unreadOnly ? "unread" : "all"}
-            onChange={(v) => setUnreadOnly(v === "unread")}
-            options={[
-              { value: "all", label: "Все" },
-              { value: "unread", label: "Непроч." },
-            ]}
+          {showUnreadFilter !== false && (
+            <Segmented
+              value={unreadOnly ? "unread" : "all"}
+              onChange={(v) => setUnreadOnly(v === "unread")}
+              options={[
+                { value: "all", label: "Все" },
+                { value: "unread", label: "Непроч." },
+              ]}
+            />
+          )}
+        </div>
+
+        {/* Фильтр по цене */}
+        <div className="mt-2 flex items-center gap-1.5">
+          <span className="text-[11px] text-zinc-500 shrink-0">Цена ₽:</span>
+          <input
+            type="number"
+            placeholder="от"
+            value={priceMin}
+            onChange={(e) => setPriceMin(e.target.value)}
+            className="w-20 rounded-lg bg-zinc-100/90 ring-1 ring-zinc-900/10 px-2 py-1 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-sky-500/25"
           />
+          <span className="text-[11px] text-zinc-400">—</span>
+          <input
+            type="number"
+            placeholder="до"
+            value={priceMax}
+            onChange={(e) => setPriceMax(e.target.value)}
+            className="w-20 rounded-lg bg-zinc-100/90 ring-1 ring-zinc-900/10 px-2 py-1 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-sky-500/25"
+          />
+          {(priceMin || priceMax) && (
+            <button
+              onClick={() => { setPriceMin(""); setPriceMax(""); }}
+              className="text-[11px] text-zinc-500 hover:text-zinc-700 px-1"
+              title="Сбросить фильтр цены"
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -519,10 +561,11 @@ function PageInner() {
   const manListScrollTopRef = useRef(0);
 
   const [filters, setFilters] = useState<
-    Record<ChatStatus, { sortOrder: SortOrder; unreadOnly: boolean }>
+    Record<ChatStatus, { sortOrder: SortOrder; unreadOnly: boolean; priceMin: string; priceMax: string }>
   >({
-    BOT: { sortOrder: "desc", unreadOnly: false },
-    MANAGER: { sortOrder: "desc", unreadOnly: false },
+    BOT: { sortOrder: "desc", unreadOnly: false, priceMin: "", priceMax: "" },
+    MANAGER: { sortOrder: "desc", unreadOnly: false, priceMin: "", priceMax: "" },
+    INACTIVE: { sortOrder: "desc", unreadOnly: false, priceMin: "", priceMax: "" },
   });
 
   const qsBOT = useMemo(() => {
@@ -533,6 +576,8 @@ function PageInner() {
     u.set("sortOrder", f.sortOrder);
     u.set("limit", "5000");
     if (f.unreadOnly) u.set("unreadOnly", "1");
+    if (f.priceMin) u.set("priceMin", f.priceMin);
+    if (f.priceMax) u.set("priceMax", f.priceMax);
     return u.toString();
   }, [filters.BOT]);
 
@@ -544,8 +589,22 @@ function PageInner() {
     u.set("sortOrder", f.sortOrder);
     u.set("limit", "5000");
     if (f.unreadOnly) u.set("unreadOnly", "1");
+    if (f.priceMin) u.set("priceMin", f.priceMin);
+    if (f.priceMax) u.set("priceMax", f.priceMax);
     return u.toString();
   }, [filters.MANAGER]);
+
+  const qsINACTIVE = useMemo(() => {
+    const f = filters.INACTIVE;
+    const u = new URLSearchParams();
+    u.set("status", "INACTIVE");
+    u.set("sortField", "lastMessageAt");
+    u.set("sortOrder", f.sortOrder);
+    u.set("limit", "5000");
+    if (f.priceMin) u.set("priceMin", f.priceMin);
+    if (f.priceMax) u.set("priceMax", f.priceMax);
+    return u.toString();
+  }, [filters.INACTIVE]);
 
   const [rtConnected, setRtConnected] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -572,6 +631,12 @@ function PageInner() {
     { refreshInterval: listRefresh, revalidateOnFocus: true }
   );
 
+  const { data: inactiveData, mutate: mutateINACTIVE } = useSWR<any>(
+    `/api/chats?${qsINACTIVE}`,
+    fetcher,
+    { refreshInterval: listRefresh, revalidateOnFocus: true }
+  );
+
   const botChats: ChatItem[] = useMemo(
     () => (botData?.items ?? botData?.chats ?? []) as ChatItem[],
     [botData]
@@ -579,6 +644,10 @@ function PageInner() {
   const manChats: ChatItem[] = useMemo(
     () => (manData?.items ?? manData?.chats ?? []) as ChatItem[],
     [manData]
+  );
+  const inactiveChats: ChatItem[] = useMemo(
+    () => (inactiveData?.items ?? inactiveData?.chats ?? []) as ChatItem[],
+    [inactiveData]
   );
 
   // If "Непроч." filter is enabled and we opened a chat, keep showing it in the list
@@ -608,10 +677,11 @@ function PageInner() {
     return (
       botChatsUI.find((c) => c.id === selectedChatId) ??
       manChatsUI.find((c) => c.id === selectedChatId) ??
+      inactiveChats.find((c) => c.id === selectedChatId) ??
       selectedChatCacheRef.current[selectedChatId] ??
       null
     );
-  }, [botChatsUI, manChatsUI, selectedChatId]);
+  }, [botChatsUI, manChatsUI, inactiveChats, selectedChatId]);
 
   // Keep latest snapshot of selected chat to survive filtering/unmounting.
   useEffect(() => {
@@ -757,8 +827,11 @@ function PageInner() {
         ...snapshot,
       };
 
-      const mutator = snapshot.status === "BOT" ? mutateBOT : mutateMAN;
-      const otherMutator = snapshot.status === "BOT" ? mutateMAN : mutateBOT;
+      const allMutators = { BOT: mutateBOT, MANAGER: mutateMAN, INACTIVE: mutateINACTIVE };
+      const mutator = allMutators[snapshot.status];
+      const otherMutators = Object.entries(allMutators)
+        .filter(([k]) => k !== snapshot.status)
+        .map(([, v]) => v);
 
       mutator(
         (cur: any) => {
@@ -778,20 +851,22 @@ function PageInner() {
         { revalidate: false },
       );
 
-      // Убираем из противоположного списка (если статус сменился)
-      otherMutator(
-        (cur: any) => {
-          if (!cur) return cur;
-          const items: ChatItem[] = (cur.items ?? []) as ChatItem[];
-          const idx = items.findIndex((c) => c.id === snapshot.id);
-          if (idx >= 0) {
-            const next = items.filter((c) => c.id !== snapshot.id);
-            return { ...cur, items: next };
-          }
-          return cur;
-        },
-        { revalidate: false },
-      );
+      // Убираем из других списков (если статус сменился)
+      for (const otherMutator of otherMutators) {
+        otherMutator(
+          (cur: any) => {
+            if (!cur) return cur;
+            const items: ChatItem[] = (cur.items ?? []) as ChatItem[];
+            const idx = items.findIndex((c) => c.id === snapshot.id);
+            if (idx >= 0) {
+              const next = items.filter((c) => c.id !== snapshot.id);
+              return { ...cur, items: next };
+            }
+            return cur;
+          },
+          { revalidate: false },
+        );
+      }
     };
 
     const onAny = (ev: MessageEvent) => {
@@ -845,7 +920,7 @@ function PageInner() {
         es.close();
       } catch { }
     };
-  }, [mutateBOT, mutateMAN]);
+  }, [mutateBOT, mutateMAN, mutateINACTIVE]);
 
   // ===== SSE (chat scoped): message_created -> update SWR cache =====
   useEffect(() => {
@@ -1035,6 +1110,11 @@ function PageInner() {
     await Promise.all([mutateBOT(), mutateMAN()]);
   }, [mutateBOT, mutateMAN]);
 
+  const reactivateChat = useCallback(async (chat: ChatItem) => {
+    await apiFetch(`/api/chats/${chat.id}/reactivate`, { method: "POST" });
+    await Promise.all([mutateBOT(), mutateMAN(), mutateINACTIVE()]);
+  }, [mutateBOT, mutateMAN, mutateINACTIVE]);
+
   const sendMessage = useCallback(async (text: string) => {
     if (!selectedChatId) return;
     if (!text) return;
@@ -1171,8 +1251,8 @@ function PageInner() {
       </div>
 
       {/* Main area */}
-      <div className="mx-auto max-w-[1600px] w-full px-4 py-4 flex-1 lg:min-h-0">
-        <div className="grid gap-4 lg:grid-cols-[360px_360px_1fr] lg:h-full lg:min-h-0">
+      <div className="mx-auto max-w-[1800px] w-full px-4 py-4 flex-1 lg:min-h-0">
+        <div className="grid gap-4 lg:grid-cols-[320px_320px_320px_1fr] lg:h-full lg:min-h-0">
           {/* BOT column */}
           <section className="rounded-3xl bg-zinc-200/70 ring-1 ring-zinc-900/10 overflow-hidden lg:flex lg:flex-col lg:min-h-0">
             <ColumnHeader
@@ -1180,11 +1260,19 @@ function PageInner() {
               subtitle="чаты, где отвечает бот"
               sortOrder={filters.BOT.sortOrder}
               unreadOnly={filters.BOT.unreadOnly}
+              priceMin={filters.BOT.priceMin}
+              priceMax={filters.BOT.priceMax}
               setSortOrder={(v) =>
                 setFilters((p) => ({ ...p, BOT: { ...p.BOT, sortOrder: v } }))
               }
               setUnreadOnly={(v) =>
                 setFilters((p) => ({ ...p, BOT: { ...p.BOT, unreadOnly: v } }))
+              }
+              setPriceMin={(v) =>
+                setFilters((p) => ({ ...p, BOT: { ...p.BOT, priceMin: v } }))
+              }
+              setPriceMax={(v) =>
+                setFilters((p) => ({ ...p, BOT: { ...p.BOT, priceMax: v } }))
               }
             />
 
@@ -1220,6 +1308,8 @@ function PageInner() {
               subtitle="чаты для оператора + закрепы"
               sortOrder={filters.MANAGER.sortOrder}
               unreadOnly={filters.MANAGER.unreadOnly}
+              priceMin={filters.MANAGER.priceMin}
+              priceMax={filters.MANAGER.priceMax}
               setSortOrder={(v) =>
                 setFilters((p) => ({
                   ...p,
@@ -1231,6 +1321,12 @@ function PageInner() {
                   ...p,
                   MANAGER: { ...p.MANAGER, unreadOnly: v },
                 }))
+              }
+              setPriceMin={(v) =>
+                setFilters((p) => ({ ...p, MANAGER: { ...p.MANAGER, priceMin: v } }))
+              }
+              setPriceMax={(v) =>
+                setFilters((p) => ({ ...p, MANAGER: { ...p.MANAGER, priceMax: v } }))
               }
             />
 
@@ -1255,6 +1351,66 @@ function PageInner() {
                     onTogglePin={togglePin}
                     showPin={true}
                   />
+                ))
+              )}
+            </div>
+          </section>
+
+          {/* INACTIVE column */}
+          <section className="rounded-3xl bg-amber-50/70 ring-1 ring-amber-900/15 overflow-hidden lg:flex lg:flex-col lg:min-h-0">
+            <ColumnHeader
+              title="Неактивные сделки"
+              subtitle="нет ответа после дожима бота"
+              sortOrder={filters.INACTIVE.sortOrder}
+              unreadOnly={filters.INACTIVE.unreadOnly}
+              priceMin={filters.INACTIVE.priceMin}
+              priceMax={filters.INACTIVE.priceMax}
+              showUnreadFilter={false}
+              setSortOrder={(v) =>
+                setFilters((p) => ({
+                  ...p,
+                  INACTIVE: { ...p.INACTIVE, sortOrder: v },
+                }))
+              }
+              setUnreadOnly={(v) =>
+                setFilters((p) => ({
+                  ...p,
+                  INACTIVE: { ...p.INACTIVE, unreadOnly: v },
+                }))
+              }
+              setPriceMin={(v) =>
+                setFilters((p) => ({ ...p, INACTIVE: { ...p.INACTIVE, priceMin: v } }))
+              }
+              setPriceMax={(v) =>
+                setFilters((p) => ({ ...p, INACTIVE: { ...p.INACTIVE, priceMax: v } }))
+              }
+            />
+
+            <div className="p-2 space-y-1.5 lg:flex-1 lg:min-h-0 overflow-auto">
+              {inactiveChats.length === 0 ? (
+                <div className="rounded-2xl bg-amber-50/70 ring-1 ring-amber-900/10 p-4 text-sm text-zinc-600">
+                  Неактивных сделок нет
+                </div>
+              ) : (
+                inactiveChats.map((c) => (
+                  <div key={c.id} className="relative group">
+                    <ChatCard
+                      chat={c}
+                      selected={c.id === selectedChatId}
+                      onSelect={selectChat}
+                      showPin={false}
+                    />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        reactivateChat(c);
+                      }}
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition inline-flex items-center rounded-lg bg-emerald-600/10 px-2 py-0.5 text-[11px] font-medium text-emerald-800 ring-1 ring-emerald-700/20 hover:bg-emerald-600/20"
+                      title="Вернуть в работу (BOT)"
+                    >
+                      Реактивировать
+                    </button>
+                  </div>
                 ))
               )}
             </div>
@@ -1330,6 +1486,11 @@ function PageInner() {
                       {selectedChat.status === "MANAGER" && (
                         <Button variant="danger" onClick={() => finishDialog(selectedChat)}>
                           Завершить диалог → BOT
+                        </Button>
+                      )}
+                      {selectedChat.status === "INACTIVE" && (
+                        <Button onClick={() => reactivateChat(selectedChat)}>
+                          Реактивировать → BOT
                         </Button>
                       )}
                     </div>

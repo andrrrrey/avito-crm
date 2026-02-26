@@ -17,19 +17,35 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
 
-  const status = url.searchParams.get("status"); // BOT | MANAGER | null
+  const status = url.searchParams.get("status"); // BOT | MANAGER | INACTIVE | null
   const sortField = (url.searchParams.get("sortField") || "lastMessageAt") as
     | "lastMessageAt"
     | "price";
   const sortOrder = (url.searchParams.get("sortOrder") || "desc") as "asc" | "desc";
   const unreadOnly = url.searchParams.get("unreadOnly") === "1";
 
+  // Фильтр по цене
+  const priceMinRaw = url.searchParams.get("priceMin");
+  const priceMaxRaw = url.searchParams.get("priceMax");
+  const priceMin = priceMinRaw ? Number.parseInt(priceMinRaw, 10) : null;
+  const priceMax = priceMaxRaw ? Number.parseInt(priceMaxRaw, 10) : null;
+
   // Чтобы UI мог показать все чаты, добавили limit.
   // По умолчанию берем побольше, потому что у тебя уже >1000 чатов.
   const take = clampInt(url.searchParams.get("limit"), 2000, 1, 5000);
 
   const where: any = {};
-  if (status === "BOT" || status === "MANAGER") where.status = status;
+  if (status === "BOT" || status === "MANAGER" || status === "INACTIVE") {
+    where.status = status;
+  }
+
+  // Фильтр по цене на уровне БД
+  if (priceMin !== null && Number.isFinite(priceMin)) {
+    where.price = { ...where.price, gte: priceMin };
+  }
+  if (priceMax !== null && Number.isFinite(priceMax)) {
+    where.price = { ...where.price, lte: priceMax };
+  }
 
   const orderBy =
     sortField === "price"
@@ -52,6 +68,7 @@ export async function GET(req: Request) {
       adUrl: true,
       chatUrl: true,
       unreadCount: true,
+      followupSentAt: true,
     },
   });
 
