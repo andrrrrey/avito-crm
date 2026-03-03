@@ -80,6 +80,45 @@ export function createSessionToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
+export type SessionUser = {
+  id: string;
+  username: string | null;
+  email: string | null;
+  role: string;
+};
+
+/** Возвращает данные пользователя из сессии, или null если не авторизован */
+export async function getSessionUser(req: Request): Promise<SessionUser | null> {
+  const cookieName = env.SESSION_COOKIE_NAME;
+  const token = getCookie(req, cookieName);
+  if (!token) return null;
+
+  const tokenHash = sha256(token);
+  const session = await prisma.session.findUnique({
+    where: { tokenHash },
+    include: { user: true },
+  });
+
+  if (!session) return null;
+  if (!session.user.isActive) return null;
+  if (session.expiresAt.getTime() < Date.now()) {
+    await prisma.session.deleteMany({ where: { tokenHash } }).catch(() => null);
+    return null;
+  }
+
+  await prisma.session.update({
+    where: { id: session.id },
+    data: { lastUsedAt: new Date() },
+  }).catch(() => null);
+
+  return {
+    id: session.user.id,
+    username: session.user.username,
+    email: session.user.email,
+    role: session.user.role,
+  };
+}
+
 export async function requireAuth(req: Request) {
   const cookieName = env.SESSION_COOKIE_NAME;
   const token = getCookie(req, cookieName);
@@ -117,6 +156,18 @@ export async function requireAuth(req: Request) {
   return null;
 }
 
+/** Требует роль ADMIN. Возвращает null если OK, NextResponse с ошибкой иначе */
+export async function requireAdmin(req: Request) {
+  const user = await getSessionUser(req);
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
+  if (user.role !== "ADMIN") {
+    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+  }
+  return null;
+}
+
 export async function destroySession(req: Request) {
   const cookieName = env.SESSION_COOKIE_NAME;
   const token = getCookie(req, cookieName);
@@ -125,4 +176,3 @@ export async function destroySession(req: Request) {
   const tokenHash = sha256(token);
   await prisma.session.deleteMany({ where: { tokenHash } });
 }
-

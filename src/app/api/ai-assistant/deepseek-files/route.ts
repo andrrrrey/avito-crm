@@ -1,8 +1,8 @@
 // src/app/api/ai-assistant/deepseek-files/route.ts
-// Управление файлами локальной базы знаний для DeepSeek.
+// Управление файлами локальной базы знаний для DeepSeek (per-user).
 
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, getSessionUser } from "@/lib/auth";
 import {
   listKnowledgeFiles,
   storeKnowledgeFile,
@@ -14,13 +14,16 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** GET — список файлов в базе знаний */
+/** GET — список файлов в базе знаний текущего пользователя */
 export async function GET(req: Request) {
   const guard = await requireAuth(req);
   if (guard) return guard;
 
+  const sessionUser = await getSessionUser(req);
+  if (!sessionUser) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+
   try {
-    const files = await listKnowledgeFiles();
+    const files = await listKnowledgeFiles(sessionUser.id);
     return NextResponse.json({ ok: true, files });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Ошибка получения списка файлов";
@@ -28,10 +31,13 @@ export async function GET(req: Request) {
   }
 }
 
-/** POST — загрузить файл в базу знаний */
+/** POST — загрузить файл в базу знаний текущего пользователя */
 export async function POST(req: Request) {
   const guard = await requireAuth(req);
   if (guard) return guard;
+
+  const sessionUser = await getSessionUser(req);
+  if (!sessionUser) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
   const formData = await req.formData().catch(() => null);
   if (!formData) {
@@ -67,6 +73,7 @@ export async function POST(req: Request) {
       file.size,
       file.type || "text/plain",
       content,
+      sessionUser.id,
     );
     return NextResponse.json({ ok: true, fileId: result.id, chunksCount: result.chunksCount });
   } catch (e: unknown) {
@@ -75,10 +82,13 @@ export async function POST(req: Request) {
   }
 }
 
-/** DELETE — удалить файл из базы знаний */
+/** DELETE — удалить файл из базы знаний (только свои файлы) */
 export async function DELETE(req: Request) {
   const guard = await requireAuth(req);
   if (guard) return guard;
+
+  const sessionUser = await getSessionUser(req);
+  if (!sessionUser) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
   const fileId = body?.fileId;
@@ -87,6 +97,21 @@ export async function DELETE(req: Request) {
       { ok: false, error: "fileId не указан" },
       { status: 400 },
     );
+  }
+
+  // Verify file belongs to this user
+  const { prisma } = await import("@/lib/prisma");
+  const file = await prisma.knowledgeBaseFile.findUnique({
+    where: { id: fileId },
+    select: { userId: true },
+  });
+
+  if (!file) {
+    return NextResponse.json({ ok: false, error: "Файл не найден" }, { status: 404 });
+  }
+
+  if (file.userId && file.userId !== sessionUser.id && sessionUser.role !== "ADMIN") {
+    return NextResponse.json({ ok: false, error: "Нет доступа к этому файлу" }, { status: 403 });
   }
 
   try {

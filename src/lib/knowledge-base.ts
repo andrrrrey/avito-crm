@@ -69,12 +69,13 @@ export async function extractTextFromFile(file: File): Promise<string> {
   return text;
 }
 
-/** Сохранить файл и его чанки в БД */
+/** Сохранить файл и его чанки в БД (опционально привязать к пользователю) */
 export async function storeKnowledgeFile(
   filename: string,
   fileSize: number,
   mimeType: string,
   content: string,
+  userId?: string,
 ): Promise<{ id: string; chunksCount: number }> {
   const chunks = chunkText(content);
   if (chunks.length === 0) {
@@ -83,6 +84,7 @@ export async function storeKnowledgeFile(
 
   const kbFile = await prisma.knowledgeBaseFile.create({
     data: {
+      ...(userId ? { userId } : {}),
       filename,
       fileSize,
       mimeType,
@@ -103,9 +105,10 @@ export async function deleteKnowledgeFile(fileId: string): Promise<void> {
   await prisma.knowledgeBaseFile.delete({ where: { id: fileId } });
 }
 
-/** Получить список всех файлов в базе знаний */
-export async function listKnowledgeFiles() {
+/** Получить список файлов в базе знаний (для конкретного пользователя или глобально) */
+export async function listKnowledgeFiles(userId?: string) {
   const files = await prisma.knowledgeBaseFile.findMany({
+    where: userId ? { userId } : {},
     select: {
       id: true,
       filename: true,
@@ -129,9 +132,11 @@ export async function listKnowledgeFiles() {
   }));
 }
 
-/** Проверить, есть ли файлы в базе знаний */
-export async function hasKnowledgeFiles(): Promise<boolean> {
-  const count = await prisma.knowledgeBaseFile.count();
+/** Проверить, есть ли файлы в базе знаний (для пользователя или глобально) */
+export async function hasKnowledgeFiles(userId?: string): Promise<boolean> {
+  const count = await prisma.knowledgeBaseFile.count({
+    where: userId ? { userId } : {},
+  });
   return count > 0;
 }
 
@@ -139,8 +144,9 @@ export async function hasKnowledgeFiles(): Promise<boolean> {
  * Поиск по базе знаний с помощью PostgreSQL full-text search.
  * Использует конфигурацию 'simple' (без стемминга) — работает для любого языка.
  * Возвращает массив текстов релевантных чанков.
+ * Если передан userId — ищет только в файлах этого пользователя.
  */
-export async function searchKnowledgeBase(query: string): Promise<string[]> {
+export async function searchKnowledgeBase(query: string, userId?: string): Promise<string[]> {
   if (!query || query.trim().length === 0) return [];
 
   try {
@@ -148,33 +154,62 @@ export async function searchKnowledgeBase(query: string): Promise<string[]> {
     const sanitized = query.replace(/[&|!():*]/g, " ").trim();
     if (!sanitized) return [];
 
-    // Пробуем full-text поиск через plainto_tsquery (simple — для любого языка)
-    const ftsResults = await prisma.$queryRaw<Array<{ content: string }>>`
-      SELECT content
-      FROM "KnowledgeBaseChunk"
-      WHERE to_tsvector('simple', content) @@ plainto_tsquery('simple', ${sanitized})
-      ORDER BY ts_rank(to_tsvector('simple', content), plainto_tsquery('simple', ${sanitized})) DESC
-      LIMIT ${MAX_CHUNKS}
-    `;
+    let ftsResults: Array<{ content: string }>;
+
+    if (userId) {
+      // Поиск только по файлам пользователя через JOIN
+      ftsResults = await prisma.$queryRaw<Array<{ content: string }>>`
+        SELECT c.content
+        FROM "KnowledgeBaseChunk" c
+        JOIN "KnowledgeBaseFile" f ON c."fileId" = f.id
+        WHERE f."userId" = ${userId}
+          AND to_tsvector('simple', c.content) @@ plainto_tsquery('simple', ${sanitized})
+        ORDER BY ts_rank(to_tsvector('simple', c.content), plainto_tsquery('simple', ${sanitized})) DESC
+        LIMIT ${MAX_CHUNKS}
+      `;
+    } else {
+      // Глобальный поиск (без фильтра по пользователю)
+      ftsResults = await prisma.$queryRaw<Array<{ content: string }>>`
+        SELECT content
+        FROM "KnowledgeBaseChunk"
+        WHERE to_tsvector('simple', content) @@ plainto_tsquery('simple', ${sanitized})
+        ORDER BY ts_rank(to_tsvector('simple', content), plainto_tsquery('simple', ${sanitized})) DESC
+        LIMIT ${MAX_CHUNKS}
+      `;
+    }
 
     if (ftsResults.length > 0) {
       return ftsResults.map((r) => r.content);
     }
 
-    // Fallback: keyword ILIKE поиск по первым трём словам запроса (безопасная параметризация)
+    // Fallback: keyword ILIKE поиск по первым трём словам запроса
     const keywords = sanitized.split(/\s+/).filter((w) => w.length >= 3).slice(0, 3);
     if (keywords.length === 0) return [];
 
-    // Строим безопасный запрос через Prisma.sql
-    const conditions = keywords.map((kw) => Prisma.sql`content ILIKE ${"%" + kw + "%"}`);
-    const whereClause = conditions.reduce(
-      (acc, cond) => Prisma.sql`${acc} OR ${cond}`,
-    );
-    const likeResults = await prisma.$queryRaw<Array<{ content: string }>>(
-      Prisma.sql`SELECT content FROM "KnowledgeBaseChunk" WHERE ${whereClause} LIMIT ${MAX_CHUNKS}`,
-    );
-
-    return likeResults.map((r) => r.content);
+    if (userId) {
+      const conditions = keywords.map((kw) => Prisma.sql`c.content ILIKE ${"%" + kw + "%"}`);
+      const whereClause = conditions.reduce(
+        (acc, cond) => Prisma.sql`${acc} OR ${cond}`,
+      );
+      const likeResults = await prisma.$queryRaw<Array<{ content: string }>>(
+        Prisma.sql`
+          SELECT c.content FROM "KnowledgeBaseChunk" c
+          JOIN "KnowledgeBaseFile" f ON c."fileId" = f.id
+          WHERE f."userId" = ${userId} AND (${whereClause})
+          LIMIT ${MAX_CHUNKS}
+        `,
+      );
+      return likeResults.map((r) => r.content);
+    } else {
+      const conditions = keywords.map((kw) => Prisma.sql`content ILIKE ${"%" + kw + "%"}`);
+      const whereClause = conditions.reduce(
+        (acc, cond) => Prisma.sql`${acc} OR ${cond}`,
+      );
+      const likeResults = await prisma.$queryRaw<Array<{ content: string }>>(
+        Prisma.sql`SELECT content FROM "KnowledgeBaseChunk" WHERE ${whereClause} LIMIT ${MAX_CHUNKS}`,
+      );
+      return likeResults.map((r) => r.content);
+    }
   } catch (e) {
     console.warn("[KB] searchKnowledgeBase error:", e);
     return [];
@@ -185,8 +220,8 @@ export async function searchKnowledgeBase(query: string): Promise<string[]> {
  * Формирует блок контекста из базы знаний для вставки в системный промпт.
  * Возвращает null, если ничего не найдено.
  */
-export async function buildKnowledgeContext(query: string): Promise<string | null> {
-  const chunks = await searchKnowledgeBase(query);
+export async function buildKnowledgeContext(query: string, userId?: string): Promise<string | null> {
+  const chunks = await searchKnowledgeBase(query, userId);
   if (chunks.length === 0) return null;
 
   const context = chunks.join("\n\n---\n\n");

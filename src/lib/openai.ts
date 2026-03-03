@@ -43,6 +43,19 @@ export async function getOpenAIClient(): Promise<OpenAI | null> {
   return new OpenAI({ apiKey: settings.apiKey });
 }
 
+/** Найти настройки пользователя по accountId чата */
+async function getUserSettingsByAccountId(accountId: number) {
+  if (!accountId) return null;
+  return prisma.user.findFirst({
+    where: { avitoAccountId: accountId },
+    select: {
+      id: true,
+      aiInstructions: true,
+      aiEscalatePrompt: true,
+    },
+  });
+}
+
 /**
  * Отправить сообщение пользователя в AI и получить ответ.
  * Поддерживает два провайдера: OpenAI (Responses API) и DeepSeek (Chat Completions API).
@@ -62,11 +75,20 @@ export async function getAssistantReply(
 
   const provider = settings.provider ?? "openai";
 
+  // Look up per-user settings via chat's accountId
+  const chat = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: { accountId: true },
+  });
+  const userSettings = chat?.accountId
+    ? await getUserSettingsByAccountId(chat.accountId)
+    : null;
+
   if (provider === "deepseek") {
-    return getDeepSeekReply(chatId, incomingText, settings);
+    return getDeepSeekReply(chatId, incomingText, settings, userSettings);
   }
 
-  return getOpenAIReply(chatId, incomingText, settings);
+  return getOpenAIReply(chatId, incomingText, settings, userSettings);
 }
 
 // ─── OpenAI (Responses API) ───────────────────────────────────────────────────
@@ -75,6 +97,7 @@ async function getOpenAIReply(
   chatId: string,
   incomingText: string,
   settings: NonNullable<Awaited<ReturnType<typeof getAiSettings>>>,
+  userSettings: { id: string; aiInstructions: string | null; aiEscalatePrompt: string | null } | null,
 ): Promise<string | null> {
   if (!settings.apiKey) {
     console.log("[AI] Skip: OpenAI API key not set");
@@ -95,9 +118,14 @@ async function getOpenAIReply(
   const previousResponseId = rawObj.openaiResponseId as string | undefined;
 
   const chatContext = buildChatContext(chat);
-  const escalateInstruction = settings.escalatePrompt || DEFAULT_ESCALATE_INSTRUCTION;
+  // Use per-user escalate prompt if set, otherwise global, otherwise default
+  const escalateInstruction =
+    userSettings?.aiEscalatePrompt ||
+    settings.escalatePrompt ||
+    DEFAULT_ESCALATE_INSTRUCTION;
 
-  let instructions = settings.instructions ?? "";
+  // Use per-user instructions if set, otherwise global
+  let instructions = userSettings?.aiInstructions ?? settings.instructions ?? "";
 
   if (settings.vectorStoreId) {
     instructions +=
@@ -189,6 +217,7 @@ async function getDeepSeekReply(
   chatId: string,
   incomingText: string,
   settings: NonNullable<Awaited<ReturnType<typeof getAiSettings>>>,
+  userSettings: { id: string; aiInstructions: string | null; aiEscalatePrompt: string | null } | null,
 ): Promise<string | null> {
   if (!settings.deepseekApiKey) {
     console.log("[AI] Skip: DeepSeek API key not set");
@@ -210,15 +239,23 @@ async function getDeepSeekReply(
   if (!chat) return null;
 
   const chatContext = buildChatContext(chat);
-  const escalateInstruction = settings.escalatePrompt || DEFAULT_ESCALATE_INSTRUCTION;
+  // Use per-user escalate prompt if set, otherwise global, otherwise default
+  const escalateInstruction =
+    userSettings?.aiEscalatePrompt ||
+    settings.escalatePrompt ||
+    DEFAULT_ESCALATE_INSTRUCTION;
 
-  // Ищем релевантные чанки в локальной базе знаний
-  const kbHasFiles = await hasKnowledgeFiles();
+  // Use per-user instructions if set, otherwise global
+  const baseInstructions = userSettings?.aiInstructions ?? settings.instructions ?? "";
+
+  // Search per-user knowledge base if user is found, otherwise global
+  const userId = userSettings?.id;
+  const kbHasFiles = await hasKnowledgeFiles(userId);
   const knowledgeContext = kbHasFiles
-    ? await buildKnowledgeContext(incomingText)
+    ? await buildKnowledgeContext(incomingText, userId)
     : null;
 
-  let systemContent = settings.instructions ?? "";
+  let systemContent = baseInstructions;
 
   if (knowledgeContext) {
     systemContent +=

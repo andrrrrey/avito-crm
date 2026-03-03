@@ -99,14 +99,26 @@ model WebhookEvent {
 }
 model User {
   id           String   @id @default(cuid())
-  username     String   @unique
+  email        String?  @unique
+  username     String?  @unique
   passwordHash String
   isActive     Boolean  @default(true)
-  role         String   @default("MANAGER")
+  role         String   @default("USER")  // "USER" | "ADMIN"
+
+  // Per-user Avito API credentials
+  avitoClientId     String?
+  avitoClientSecret String?
+  avitoAccountId    Int?
+
+  // Per-user AI settings (override global defaults)
+  aiInstructions   String?
+  aiEscalatePrompt String?
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  sessions     Session[]
+  sessions           Session[]
+  knowledgeBaseFiles KnowledgeBaseFile[]
 }
 
 model Session {
@@ -138,12 +150,16 @@ model AiAssistant {
 // Файлы базы знаний для DeepSeek (хранятся локально в БД)
 model KnowledgeBaseFile {
   id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   filename  String
   fileSize  Int
   mimeType  String
   createdAt DateTime @default(now())
 
   chunks    KnowledgeBaseChunk[]
+
+  @@index([userId])
 }
 
 // Чанки текста из файлов базы знаний
