@@ -11,6 +11,26 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+// Outgoing attachments are intentionally disabled.
+
+function getPublicBaseUrl(req: Request) {
+  const base = (env.PUBLIC_BASE_URL ?? "").trim();
+  if (base) return base.replace(/\/$/, "");
+
+  const proto = (req.headers.get("x-forwarded-proto") || "http").split(",")[0].trim();
+  const host = (req.headers.get("x-forwarded-host") || req.headers.get("host") || "").split(",")[0].trim();
+  return host ? `${proto}://${host}` : "";
+}
+
+function makeLocalUploadUrl(fileId: string) {
+  return `/api/uploads/${fileId}`;
+}
+
+function makePublicUploadUrl(req: Request, localUrl: string) {
+  const base = getPublicBaseUrl(req);
+  return base ? `${base}${localUrl}` : "";
+}
+
 function jsonError(status: number, error: string, extra?: any) {
   return NextResponse.json({ ok: false, error, ...(extra ?? {}) }, { status });
 }
@@ -21,13 +41,22 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const { id } = await ctx.params;
 
-  const body = (await req.json().catch(() => null)) as null | { text?: unknown; markRead?: unknown };
-  if (!body) return jsonError(400, "bad_json");
+  const ct = (req.headers.get("content-type") || "").toLowerCase();
 
-  const text = String(body.text ?? "").trim();
-  if (!text) return jsonError(400, "empty_text");
+  let text = "";
+  let markRead = true;
 
-  const markRead = body.markRead === undefined ? true : Boolean(body.markRead);
+  if (ct.includes("multipart/form-data")) {
+    // UI does not allow attachments; block manual multipart attempts as well.
+    return jsonError(400, "attachments_disabled");
+  } else {
+    const body = (await req.json().catch(() => null)) as null | { text?: unknown; markRead?: unknown };
+    if (!body) return jsonError(400, "bad_json");
+    text = String(body.text ?? "").trim();
+    markRead = body.markRead === undefined ? true : Boolean(body.markRead);
+  }
+
+  if (!text) return jsonError(400, "empty_payload");
 
   const chat = await prisma.chat.findUnique({ where: { id } });
   if (!chat) return jsonError(404, "chat_not_found");
@@ -38,12 +67,14 @@ export async function POST(req: Request, ctx: Ctx) {
   if (env.MOCK_MODE) {
     const avitoMessageId = `local_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
+    const storedText = text;
+
     const msg = await prisma.message.create({
       data: {
         chatId: chat.id,
         avitoMessageId,
         direction: "OUT",
-        text,
+        text: storedText,
         sentAt: now,
         isRead: true,
         raw: { mock: true, source: "crm_send" },
@@ -53,9 +84,11 @@ export async function POST(req: Request, ctx: Ctx) {
     await prisma.chat.update({
       where: { id: chat.id },
       data: {
-        status: chat.status === "BOT" ? "MANAGER" : chat.status,
+        status: "MANAGER",
         lastMessageAt: now,
-        lastMessageText: text,
+        lastMessageText: storedText,
+        followupSentAt: null,
+        manualUnread: false,
       },
     });
 
@@ -69,7 +102,7 @@ export async function POST(req: Request, ctx: Ctx) {
         where: { chatId: chat.id, direction: "IN", isRead: false },
       });
 
-      await prisma.chat.update({ where: { id: chat.id }, data: { unreadCount: unread } });
+      await prisma.chat.update({ where: { id: chat.id }, data: { unreadCount: unread, manualUnread: false } });
     }
 
     publish({
@@ -85,13 +118,14 @@ export async function POST(req: Request, ctx: Ctx) {
         text: msg.text,
         sentAt: msg.sentAt.toISOString(),
         isRead: true,
+        raw: msg.raw,
       },
     });
     publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
 
     return NextResponse.json({
       ok: true,
-      message: { id: msg.id, chatId: msg.chatId, direction: msg.direction, text: msg.text, sentAt: msg.sentAt },
+      message: { id: msg.id, chatId: msg.chatId, direction: msg.direction, text: msg.text, sentAt: msg.sentAt, raw: msg.raw },
     });
   }
 
@@ -100,7 +134,6 @@ export async function POST(req: Request, ctx: Ctx) {
 
   let avitoResp: any;
   try {
-    // ВАЖНО: правильная сигнатура (chatId, text)
     avitoResp = await avitoSendTextMessage(chat.avitoChatId, text);
   } catch (e: any) {
     return jsonError(502, "avito_send_failed", { message: String(e?.message ?? e) });
@@ -122,7 +155,7 @@ export async function POST(req: Request, ctx: Ctx) {
       text,
       sentAt: now,
       isRead: true,
-      raw: avitoResp ?? { source: "avito_send" },
+      raw: { ...(avitoResp ?? { source: "avito_send" }) },
     },
   });
 
@@ -131,7 +164,9 @@ export async function POST(req: Request, ctx: Ctx) {
     data: {
       status: "MANAGER", // пока бот не подключен — держим в MANAGER
       lastMessageAt: now,
-      lastMessageText: text,
+      lastMessageText: msg.text,
+      followupSentAt: null,
+      manualUnread: false,
     },
   });
 
@@ -145,7 +180,7 @@ export async function POST(req: Request, ctx: Ctx) {
       where: { chatId: chat.id, direction: "IN", isRead: false },
     });
 
-    await prisma.chat.update({ where: { id: chat.id }, data: { unreadCount: unread } });
+    await prisma.chat.update({ where: { id: chat.id }, data: { unreadCount: unread, manualUnread: false } });
   }
 
   publish({
@@ -161,12 +196,13 @@ export async function POST(req: Request, ctx: Ctx) {
       text: msg.text,
       sentAt: msg.sentAt.toISOString(),
       isRead: true,
+      raw: msg.raw,
     },
   });
   publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
 
   return NextResponse.json({
     ok: true,
-    message: { id: msg.id, chatId: msg.chatId, direction: msg.direction, text: msg.text, sentAt: msg.sentAt },
+    message: { id: msg.id, chatId: msg.chatId, direction: msg.direction, text: msg.text, sentAt: msg.sentAt, raw: msg.raw },
   });
 }

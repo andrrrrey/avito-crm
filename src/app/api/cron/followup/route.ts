@@ -113,7 +113,7 @@ export async function POST(req: Request) {
           select: {
             id: true, status: true, customerName: true, itemTitle: true, price: true,
             lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,
-            unreadCount: true, pinned: true,
+            unreadCount: true, pinned: true, manualUnread: true, labelColor: true,
           },
         });
 
@@ -133,6 +133,8 @@ export async function POST(req: Request) {
             chatUrl: snap.chatUrl,
             unreadCount: snap.unreadCount,
             pinned: snap.pinned,
+            manualUnread: (snap as any).manualUnread ?? false,
+            labelColor: (snap as any).labelColor ?? null,
           } : undefined,
         });
 
@@ -197,7 +199,7 @@ export async function POST(req: Request) {
           select: {
             id: true, status: true, customerName: true, itemTitle: true, price: true,
             lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,
-            unreadCount: true, pinned: true,
+            unreadCount: true, pinned: true, manualUnread: true, labelColor: true,
           },
         });
 
@@ -217,6 +219,8 @@ export async function POST(req: Request) {
             chatUrl: snap.chatUrl,
             unreadCount: snap.unreadCount,
             pinned: snap.pinned,
+            manualUnread: (snap as any).manualUnread ?? false,
+            labelColor: (snap as any).labelColor ?? null,
           } : undefined,
         });
 
@@ -299,6 +303,8 @@ export async function POST(req: Request) {
           chatUrl: snap.chatUrl,
           unreadCount: snap.unreadCount,
           pinned: snap.pinned,
+            manualUnread: (snap as any).manualUnread ?? false,
+            labelColor: (snap as any).labelColor ?? null,
         } : undefined,
       });
 

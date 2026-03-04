@@ -1,3 +1,4 @@
+// src/app/api/chats/[id]/escalate/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
@@ -17,17 +18,25 @@ export async function POST(req: Request, ctx: Ctx) {
   const chat = await prisma.chat.findUnique({ where: { id } });
   if (!chat) return NextResponse.json({ ok: false }, { status: 404 });
 
-  if (chat.status !== "MANAGER") {
-    return NextResponse.json({ ok: false, error: "Only MANAGER can finish" }, { status: 400 });
+  // Переводим в менеджера из BOT или INACTIVE (забрать чат руками).
+  if (chat.status !== "BOT" && chat.status !== "INACTIVE") {
+    return NextResponse.json(
+      { ok: false, error: "Only BOT/INACTIVE chats can be escalated" },
+      { status: 400 }
+    );
   }
 
-  await prisma.chat.update({
+  const updated = await prisma.chat.update({
     where: { id },
-    data: { status: "BOT", pinned: false, manualUnread: false, followupSentAt: null },
+    data: {
+      status: "MANAGER",
+      pinned: false,
+      manualUnread: false,
+      followupSentAt: null,
+    },
   });
 
-  publish({ type: "chat_finished", chatId: chat.id, avitoChatId: chat.avitoChatId });
-  publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+  publish({ type: "chat_updated", chatId: updated.id, avitoChatId: updated.avitoChatId });
 
   return NextResponse.json({ ok: true });
 }

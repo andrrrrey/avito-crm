@@ -103,6 +103,8 @@ export async function POST(req: Request) {
       chatUrl: true,
       unreadCount: true,
       pinned: true,
+      manualUnread: true,
+      labelColor: true,
     },
   });
 

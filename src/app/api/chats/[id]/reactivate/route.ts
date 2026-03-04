@@ -30,6 +30,7 @@ export async function POST(req: Request, ctx: Ctx) {
     data: {
       status: "BOT",
       followupSentAt: null,
+      manualUnread: false,
       raw: {
         ...rawObj,
         reactivated: {
@@ -45,7 +46,7 @@ export async function POST(req: Request, ctx: Ctx) {
     select: {
       id: true, status: true, customerName: true, itemTitle: true, price: true,
       lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,
-      unreadCount: true, pinned: true,
+      unreadCount: true, pinned: true, avitoChatId: true, manualUnread: true, labelColor: true, followupSentAt: true,
     },
   });
 
@@ -55,7 +56,8 @@ export async function POST(req: Request, ctx: Ctx) {
     avitoChatId: chat.avitoChatId,
     chatSnapshot: snap ? {
       id: snap.id,
-      status: snap.status as any,
+      avitoChatId: snap.avitoChatId,
+      status: snap.status,
       customerName: snap.customerName,
       itemTitle: snap.itemTitle,
       price: snap.price,
@@ -65,6 +67,9 @@ export async function POST(req: Request, ctx: Ctx) {
       chatUrl: snap.chatUrl,
       unreadCount: snap.unreadCount,
       pinned: snap.pinned,
+      manualUnread: (snap as any).manualUnread ?? false,
+      labelColor: (snap as any).labelColor ?? null,
+      followupSentAt: (snap as any).followupSentAt ? (snap as any).followupSentAt.toISOString() : null,
     } : undefined,
   });
 

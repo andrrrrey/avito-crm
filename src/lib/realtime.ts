@@ -31,12 +31,14 @@ export type CRMRealtimeEvent = {
     text: string;
     sentAt: string;
     isRead: boolean;
+    raw?: any;
   };
 
   // Снэпшот чата для мгновенного обновления списка без перезапроса.
   chatSnapshot?: {
     id: string;
-    status: "BOT" | "MANAGER";
+    avitoChatId?: string;
+    status: "BOT" | "MANAGER" | "INACTIVE";
     customerName: string | null;
     itemTitle: string | null;
     price: number | null;
@@ -46,6 +48,9 @@ export type CRMRealtimeEvent = {
     chatUrl: string | null;
     unreadCount: number;
     pinned: boolean;
+    manualUnread?: boolean;
+    labelColor?: "RED" | "YELLOW" | "BLUE" | "GREEN" | null;
+    followupSentAt?: string | null;
   };
 };
 

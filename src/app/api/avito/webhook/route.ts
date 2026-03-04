@@ -10,6 +10,127 @@ import { getAssistantReply, ESCALATE_MARKER } from "@/lib/openai";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const PHOTO_PLACEHOLDER = "📷 Фото";
+const UNSUPPORTED_PLACEHOLDER = "Сообщение не поддерживается";
+
+function looksLikeImageUrl(s: string) {
+  const v = (s || "").trim();
+  if (!v) return false;
+  if (!/^https?:\/\//i.test(v)) return false;
+
+  if (/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(v)) return true;
+
+  try {
+    const u = new URL(v);
+    const p = (u.pathname || "").toLowerCase();
+    const q = (u.search || "").toLowerCase();
+    if (p.includes("/image") || p.includes("/img") || p.includes("image")) return true;
+    if (q.includes("image") || q.includes("jpg") || q.includes("jpeg") || q.includes("png") || q.includes("webp") || q.includes("gif")) return true;
+  } catch {
+    // ignore
+  }
+
+  return false;
+}
+
+function pickBestFromSizes(sizes: any): string | null {
+  if (!sizes || typeof sizes !== "object") return null;
+
+  let best: string | null = null;
+  let bestScore = -1;
+
+  for (const [k, v] of Object.entries(sizes)) {
+    if (typeof v !== "string") continue;
+    if (!looksLikeImageUrl(v)) continue;
+
+    const key = String(k);
+    let score = 1;
+
+    const m = key.match(/(\d+)\s*[xх]\s*(\d+)/i);
+    if (m) {
+      const w = Number(m[1]);
+      const h = Number(m[2]);
+      if (Number.isFinite(w) && Number.isFinite(h)) score = w * h;
+    }
+
+    if (/orig|original|source|full|max/i.test(key)) score += 1e12;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = v;
+    }
+  }
+
+  return best;
+}
+
+function extractImageUrls(obj: any): string[] {
+  const out: string[] = [];
+  const push = (v: any) => {
+    if (typeof v !== "string") return;
+    if (looksLikeImageUrl(v) && !out.includes(v)) out.push(v);
+  };
+
+  const c = obj?.content ?? obj?.message?.content ?? obj?.value?.content ?? null;
+
+  // Prefer a single "primary" image URL (Avito often provides multiple size variants).
+  const primary =
+    (typeof c?.image?.url === "string" && looksLikeImageUrl(c.image.url) ? c.image.url : null) ||
+    (typeof c?.image_url === "string" && looksLikeImageUrl(c.image_url) ? c.image_url : null) ||
+    (typeof c?.file?.url === "string" && looksLikeImageUrl(c.file.url) ? c.file.url : null) ||
+    null;
+
+  if (primary) return [primary];
+
+  // sizes maps like {"140x105": "https://..."}
+  const sizes = c?.image?.sizes ?? c?.image?.urls ?? c?.images ?? null;
+  const bestFromSizes = pickBestFromSizes(sizes);
+  if (bestFromSizes) return [bestFromSizes];
+
+  push(c?.url);
+
+  // last resort: shallow scan только рядом с контентом сообщения (чтобы не поймать картинки объявления)
+  const shallow = [c, c?.image, c?.file, obj?.attachments].filter(Boolean);
+  for (const root of shallow) {
+    if (!root) continue;
+
+    if (Array.isArray(root)) {
+      for (const it of root) {
+        if (typeof it === "string") push(it);
+        else if (it && typeof it === "object") {
+          push((it as any).url);
+          push((it as any).href);
+        }
+      }
+      continue;
+    }
+
+    if (typeof root !== "object") continue;
+
+    for (const [k, v] of Object.entries(root)) {
+      if (typeof v === "string") {
+        push(v);
+        continue;
+      }
+      if (!v || typeof v !== "object") continue;
+
+      if (k === "sizes" || k === "urls" || k === "images") {
+        const best = pickBestFromSizes(v);
+        if (best) push(best);
+        continue;
+      }
+
+      for (const vv of Object.values(v)) {
+        if (typeof vv === "string") push(vv);
+      }
+    }
+  }
+
+  return out.length > 0 ? [out[0]] : [];
+}
+
+
+
 function requireWebhookKey(req: Request) {
   if (env.NODE_ENV !== "production") return null; // dev: пропускаем, чтобы точно видеть запросы
 
@@ -625,7 +746,20 @@ export async function POST(req: Request) {
   const authorId = value?.author_id ?? value?.authorId ?? null;
 
   const createdAt = toDateMaybe(value?.created ?? value?.created_at ?? value?.timestamp) ?? new Date();
-  const text = String(value?.content?.text ?? value?.content?.message?.text ?? value?.text ?? "");
+  const textRaw = String(value?.content?.text ?? value?.content?.message?.text ?? value?.text ?? "");
+  const images = extractImageUrls(value ?? body);
+  const text = textRaw.trim() || (images.length ? PHOTO_PLACEHOLDER : UNSUPPORTED_PLACEHOLDER);
+
+  const messageRaw =
+    body && typeof body === "object"
+      ? {
+          ...(body as any),
+          crm: {
+            kind: images.length ? "image" : "text",
+            attachments: images.length ? { images } : undefined,
+          },
+        }
+      : body;
 
   if (eventId) {
     await prisma.webhookEvent.createMany({
@@ -755,7 +889,7 @@ export async function POST(req: Request) {
               text,
               sentAt: createdAt,
               isRead: direction === "OUT" ? true : false,
-              raw: body,
+              raw: messageRaw,
             },
           ],
           skipDuplicates: true,
@@ -819,13 +953,14 @@ export async function POST(req: Request) {
       select: {
         id: true, status: true, customerName: true, itemTitle: true, price: true,
         lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,
-        unreadCount: true, pinned: true,
+        unreadCount: true, pinned: true, avitoChatId: true, manualUnread: true, labelColor: true, followupSentAt: true,
       },
     });
 
     const chatSnapshot = chatSnap ? {
       id: chatSnap.id,
-      status: chatSnap.status as "BOT" | "MANAGER",
+      avitoChatId: chatSnap.avitoChatId,
+      status: chatSnap.status,
       customerName: chatSnap.customerName,
       itemTitle: chatSnap.itemTitle,
       price: chatSnap.price,
@@ -835,6 +970,9 @@ export async function POST(req: Request) {
       chatUrl: chatSnap.chatUrl,
       unreadCount: chatSnap.unreadCount,
       pinned: chatSnap.pinned,
+      manualUnread: (chatSnap as any).manualUnread ?? false,
+      labelColor: (chatSnap as any).labelColor ?? null,
+      followupSentAt: (chatSnap as any).followupSentAt ? (chatSnap as any).followupSentAt.toISOString() : null,
     } : undefined;
 
     if (res.created && res.messageId) {

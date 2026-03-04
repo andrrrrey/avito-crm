@@ -31,6 +31,123 @@ function getHistorySyncedAt(raw: any): string | null {
   return typeof v === "string" && v.trim() ? v : null;
 }
 
+function looksLikeImageUrl(s: string) {
+  const v = (s || "").trim();
+  if (!v) return false;
+  if (!/^https?:\/\//i.test(v)) return false;
+
+  if (/\.(png|jpe?g|webp|gif)(\?|#|$)/i.test(v)) return true;
+
+  try {
+    const u = new URL(v);
+    const p = (u.pathname || "").toLowerCase();
+    const q = (u.search || "").toLowerCase();
+    if (p.includes("/image") || p.includes("/img") || p.includes("image")) return true;
+    if (q.includes("image") || q.includes("jpg") || q.includes("jpeg") || q.includes("png") || q.includes("webp") || q.includes("gif")) return true;
+  } catch {
+    // ignore
+  }
+
+  return false;
+}
+
+function pickBestFromSizes(sizes: any): string | null {
+  if (!sizes || typeof sizes !== "object") return null;
+
+  let best: string | null = null;
+  let bestScore = -1;
+
+  for (const [k, v] of Object.entries(sizes)) {
+    if (typeof v !== "string") continue;
+    if (!looksLikeImageUrl(v)) continue;
+
+    const key = String(k);
+    let score = 1;
+
+    const m = key.match(/(\d+)\s*[xх]\s*(\d+)/i);
+    if (m) {
+      const w = Number(m[1]);
+      const h = Number(m[2]);
+      if (Number.isFinite(w) && Number.isFinite(h)) score = w * h;
+    }
+
+    if (/orig|original|source|full|max/i.test(key)) score += 1e12;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = v;
+    }
+  }
+
+  return best;
+}
+
+function extractImageUrls(obj: any): string[] {
+  const out: string[] = [];
+  const push = (v: any) => {
+    if (typeof v !== "string") return;
+    if (looksLikeImageUrl(v) && !out.includes(v)) out.push(v);
+  };
+
+  const c = obj?.content ?? obj?.message?.content ?? obj?.value?.content ?? null;
+
+  // Prefer a single "primary" image URL (Avito often provides multiple size variants).
+  const primary =
+    (typeof c?.image?.url === "string" && looksLikeImageUrl(c.image.url) ? c.image.url : null) ||
+    (typeof c?.image_url === "string" && looksLikeImageUrl(c.image_url) ? c.image_url : null) ||
+    (typeof c?.file?.url === "string" && looksLikeImageUrl(c.file.url) ? c.file.url : null) ||
+    null;
+
+  if (primary) return [primary];
+
+  // sizes maps like {"140x105": "https://..."}
+  const sizes = c?.image?.sizes ?? c?.image?.urls ?? c?.images ?? null;
+  const bestFromSizes = pickBestFromSizes(sizes);
+  if (bestFromSizes) return [bestFromSizes];
+
+  push(c?.url);
+
+  // last resort: shallow scan только рядом с контентом сообщения (чтобы не поймать картинки объявления)
+  const shallow = [c, c?.image, c?.file, obj?.attachments].filter(Boolean);
+  for (const root of shallow) {
+    if (!root) continue;
+
+    if (Array.isArray(root)) {
+      for (const it of root) {
+        if (typeof it === "string") push(it);
+        else if (it && typeof it === "object") {
+          push((it as any).url);
+          push((it as any).href);
+        }
+      }
+      continue;
+    }
+
+    if (typeof root !== "object") continue;
+
+    for (const [k, v] of Object.entries(root)) {
+      if (typeof v === "string") {
+        push(v);
+        continue;
+      }
+      if (!v || typeof v !== "object") continue;
+
+      if (k === "sizes" || k === "urls" || k === "images") {
+        const best = pickBestFromSizes(v);
+        if (best) push(best);
+        continue;
+      }
+
+      for (const vv of Object.values(v)) {
+        if (typeof vv === "string") push(vv);
+      }
+    }
+  }
+
+  return out.length > 0 ? [out[0]] : [];
+}
+
+
 async function readFromDb(chatId: string) {
   // ✅ показываем последние сообщения (а не самые старые)
   const rows = await prisma.message.findMany({
@@ -49,6 +166,7 @@ async function readFromDb(chatId: string) {
     text: m.text,
     sentAt: m.sentAt,
     isRead: m.isRead,
+    raw: m.raw,
   }));
 }
 
@@ -161,7 +279,12 @@ async function refreshFromAvito(chat: { id: string; avitoChatId: string | null; 
       // эвристика: если у чата unreadCount==0 — считаем входящие прочитанными
       const isRead = direction === "OUT" ? true : chat.unreadCount === 0;
 
-      return { avitoMessageId, direction, text, sentAt, isRead, raw: m };
+      const images = extractImageUrls(m);
+      const rawWithImages = images.length
+        ? { ...(m as any), crm: { ...((m as any).crm ?? {}), attachments: { images } } }
+        : m;
+
+      return { avitoMessageId, direction, text, sentAt, isRead, raw: rawWithImages };
     })
     .filter(Boolean) as Array<{
     avitoMessageId: string;
@@ -187,13 +310,14 @@ async function refreshFromAvito(chat: { id: string; avitoChatId: string | null; 
           sentAt: m.sentAt,
           isRead: m.isRead,
           raw: m.raw,
-        },
+                  },
         update: {
           direction: m.direction,
           text: m.text,
           sentAt: m.sentAt,
           isRead: m.isRead,
           raw: m.raw,
+          
         },
       });
     }

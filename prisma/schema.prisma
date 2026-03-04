@@ -18,6 +18,13 @@ enum MessageDirection {
   OUT
 }
 
+enum ChatLabelColor {
+  YELLOW
+  RED
+  BLUE
+  GREEN
+}
+
 model Chat {
   id              String   @id @default(cuid())
   createdAt       DateTime @default(now())
@@ -44,6 +51,12 @@ model Chat {
 
   unreadCount     Int @default(0)
 
+  // Ручная отметка "непрочитанный" (для менеджера)
+  manualUnread   Boolean @default(false)
+
+  // Метка чата (цвет) для сортировки/приоритизации
+  labelColor     ChatLabelColor?
+
   raw             Json @default("{}")
 
   messages        Message[]
@@ -51,6 +64,7 @@ model Chat {
   // индексы под твои сортировки и фильтры
   @@index([status, pinned, lastMessageAt])
   @@index([status, pinned, price])
+  @@index([labelColor])
 }
 
 model Message {

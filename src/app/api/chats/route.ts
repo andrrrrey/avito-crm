@@ -58,6 +58,7 @@ export async function GET(req: Request) {
     take,
     select: {
       id: true,
+      avitoChatId: true,
       status: true,
       pinned: true,
       customerName: true,
@@ -68,14 +69,13 @@ export async function GET(req: Request) {
       adUrl: true,
       chatUrl: true,
       unreadCount: true,
+      manualUnread: true,
+      labelColor: true,
       followupSentAt: true,
     },
   });
 
   let rows = items;
-
-  // unreadOnly фильтруем после запроса — чтобы не усложнять SQL
-  if (unreadOnly) rows = rows.filter((c) => (c.unreadCount ?? 0) > 0);
 
   // На всякий случай пересчитаем unreadCount по сообщениям.
   const ids = rows.map((r) => r.id);
@@ -86,6 +86,9 @@ export async function GET(req: Request) {
   });
   const countMap = new Map(counts.map((c) => [c.chatId, c._count._all]));
   rows = rows.map((r) => ({ ...r, unreadCount: countMap.get(r.id) ?? r.unreadCount ?? 0 }));
+
+  // unreadOnly: учитываем и реальные непрочитанные сообщения, и ручную отметку
+  if (unreadOnly) rows = rows.filter((c) => (c.unreadCount ?? 0) > 0 || Boolean((c as any).manualUnread));
 
   return NextResponse.json({ ok: true, items: rows });
 }

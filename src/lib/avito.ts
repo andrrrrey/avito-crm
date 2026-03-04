@@ -198,6 +198,216 @@ export async function avitoSendTextMessage(avitoChatId: string, text: string) {
   });
 }
 
+
+export async function avitoSendImageMessage(avitoChatId: string, imageUrl: string, caption?: string) {
+  const chatId = encodePathSegmentStrict(avitoChatId);
+
+  const variants: any[] = [
+  // TOP-LEVEL (часто именно так ожидают)
+  { type: "image", image_url: imageUrl, text: caption },
+  { type: "image", url: imageUrl, text: caption },
+  { type: "image", link: imageUrl, text: caption },
+  { type: "image", image: { url: imageUrl }, text: caption },
+
+  // "message"-style payloads
+  { type: "image", message: { url: imageUrl, text: caption } },
+  { type: "image", message: { image_url: imageUrl, text: caption } },
+  { type: "image", message: { link: imageUrl, text: caption } },
+  { type: "image", message: { image: { url: imageUrl }, text: caption } },
+
+  // "content"-style payloads
+  { type: "image", content: { url: imageUrl, text: caption } },
+  { type: "image", content: { image_url: imageUrl, text: caption } },
+  { type: "image", content: { image: { url: imageUrl }, text: caption } },
+
+  // иногда поле называется "attachment"
+  { type: "image", attachment: { url: imageUrl }, text: caption },
+].map((v) => {
+  if (v?.message && v.message.text === undefined) delete v.message.text;
+  if (v?.content && v.content.text === undefined) delete v.content.text;
+  if (v?.text === undefined) delete v.text;
+  return v;
+});
+
+  const accountId = env.AVITO_ACCOUNT_ID;
+  const endpoints = [
+    `/messenger/v3/accounts/${accountId}/chats/${chatId}/messages`,
+    `/messenger/v2/accounts/${accountId}/chats/${chatId}/messages`,
+    `/messenger/v1/accounts/${accountId}/chats/${chatId}/messages`,
+  ];
+
+  let lastErr: any = null;
+
+  for (const ep of endpoints) {
+    for (const body of variants) {
+      try {
+        return await avitoFetch(ep, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } catch (e: any) {
+        lastErr = e;
+      }
+    }
+  }
+
+  throw new Error(`avitoSendImageMessage failed: ${String(lastErr?.message ?? lastErr)}`);
+}
+export async function avitoSendImageBinaryMessage(
+  avitoChatId: string,
+  file: { data: Buffer; filename: string; mime: string },
+  caption?: string
+) {
+  const chatId = encodePathSegmentStrict(avitoChatId);
+  const accountId = env.AVITO_ACCOUNT_ID;
+
+  const endpoints = [
+    `/messenger/v3/accounts/${accountId}/chats/${chatId}/messages`,
+    `/messenger/v2/accounts/${accountId}/chats/${chatId}/messages`,
+    `/messenger/v1/accounts/${accountId}/chats/${chatId}/messages`,
+  ];
+
+  // Несколько вариантов названий полей (у разных реализаций бывает по-разному)
+  const buildForms = () => {
+    const makeBlob = () =>
+  new Blob([new Uint8Array(file.data)], { type: file.mime || "application/octet-stream" });
+
+    const forms: Array<{ kind: string; form: FormData }> = [];
+
+    {
+      const fd = new FormData();
+      fd.append("type", "image");
+      if (caption) fd.append("text", caption);
+      fd.append("file", makeBlob(), file.filename);
+      forms.push({ kind: "type+text+file(file)", form: fd });
+    }
+
+    {
+      const fd = new FormData();
+      fd.append("type", "image");
+      if (caption) fd.append("text", caption);
+      fd.append("image", makeBlob(), file.filename);
+      forms.push({ kind: "type+text+file(image)", form: fd });
+    }
+
+    {
+      const fd = new FormData();
+      fd.append("type", "image");
+      if (caption) fd.append("caption", caption);
+      fd.append("file", makeBlob(), file.filename);
+      forms.push({ kind: "type+caption+file", form: fd });
+    }
+
+    return forms;
+  };
+
+  let lastErr: any = null;
+  let lastMeta = "";
+
+  for (const ep of endpoints) {
+    for (const { kind, form } of buildForms()) {
+      try {
+        // ВАЖНО: Content-Type НЕ ставим вручную — fetch сам выставит boundary
+        return await avitoFetch(ep, {
+          method: "POST",
+          body: form as any,
+        });
+      } catch (e: any) {
+        lastErr = e;
+        lastMeta = `${ep} :: ${kind}`;
+      }
+    }
+  }
+
+  throw new Error(
+    `avitoSendImageBinaryMessage failed (${lastMeta}): ${String(lastErr?.message ?? lastErr)}`
+  );
+}
+
+export async function avitoSendFileBinaryMessage(
+  avitoChatId: string,
+  file: { data: Buffer; filename: string; mime: string },
+  caption?: string
+) {
+  const chatId = encodePathSegmentStrict(avitoChatId);
+  const accountId = env.AVITO_ACCOUNT_ID;
+
+  const endpoints = [
+    `/messenger/v3/accounts/${accountId}/chats/${chatId}/messages`,
+    `/messenger/v2/accounts/${accountId}/chats/${chatId}/messages`,
+    `/messenger/v1/accounts/${accountId}/chats/${chatId}/messages`,
+  ];
+
+  // Avito Messenger API официально может быть ограничен только текстом.
+  // Тем не менее, пробуем отправить файл/документ через multipart (если поддерживается в аккаунте/версии).
+  const buildForms = () => {
+    const makeBlob = () =>
+      new Blob([new Uint8Array(file.data)], { type: file.mime || "application/octet-stream" });
+
+    const forms: Array<{ kind: string; form: FormData }> = [];
+    const types = ["file", "document", "attachment"];
+
+    for (const t of types) {
+      // type + file(field=file)
+      {
+        const fd = new FormData();
+        fd.append("type", t);
+        if (caption) fd.append("text", caption);
+        fd.append("file", makeBlob(), file.filename);
+        forms.push({ kind: `${t}+text+file(file)`, form: fd });
+      }
+      // type + file(field=attachment)
+      {
+        const fd = new FormData();
+        fd.append("type", t);
+        if (caption) fd.append("text", caption);
+        fd.append("attachment", makeBlob(), file.filename);
+        forms.push({ kind: `${t}+text+file(attachment)`, form: fd });
+      }
+      // type + caption + file
+      {
+        const fd = new FormData();
+        fd.append("type", t);
+        if (caption) fd.append("caption", caption);
+        fd.append("file", makeBlob(), file.filename);
+        forms.push({ kind: `${t}+caption+file`, form: fd });
+      }
+      // filename hint
+      {
+        const fd = new FormData();
+        fd.append("type", t);
+        if (caption) fd.append("text", caption);
+        fd.append("filename", file.filename);
+        fd.append("file", makeBlob(), file.filename);
+        forms.push({ kind: `${t}+text+filename+file`, form: fd });
+      }
+    }
+
+    return forms;
+  };
+
+  let lastErr: any = null;
+  let lastMeta = "";
+
+  for (const ep of endpoints) {
+    for (const { kind, form } of buildForms()) {
+      try {
+        return await avitoFetch(ep, { method: "POST", body: form as any });
+      } catch (e: any) {
+        lastErr = e;
+        lastMeta = `${ep} :: ${kind}`;
+      }
+    }
+  }
+
+  throw new Error(
+    `avitoSendFileBinaryMessage failed (${lastMeta}): ${String(lastErr?.message ?? lastErr)}`
+  );
+}
+
+
+
 /**
  * ✅ Объявление по item_id: GET /core/v1/accounts/{user_id}/items/{item_id}/
  * (эндпоинт встречается в публичных спецификациях/SDK). :contentReference[oaicite:2]{index=2}

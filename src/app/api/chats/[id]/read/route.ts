@@ -51,6 +51,10 @@ export async function POST(req: Request, ctx: Ctx) {
 
     await tx.chat.update({
       where: { id: chat.id },
+      // Важно: manualUnread НЕ трогаем здесь.
+      // Ручная отметка "непрочитано" снимается отдельным endpoint'ом /unread (DELETE)
+      // при открытии чата в UI. Иначе возможна гонка: /read (в полёте) может
+      // перезатереть manualUnread=true, установленный пользователем чуть позже.
       data: { unreadCount: 0 },
     });
   });
