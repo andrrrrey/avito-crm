@@ -78,12 +78,18 @@ type KbFile = {
 export default function AiAssistantPage() {
   const router = useRouter();
 
+  const { data: meData } = useSWR<{ ok: boolean; user: { role: string } | null }>(
+    "/api/auth/me",
+    fetcher,
+  );
+
   const {
     data: settingsData,
     mutate: mutateSettings,
   } = useSWR<{ ok: boolean; data: AiSettings }>("/api/ai-assistant", fetcher);
 
   const settings = settingsData?.data;
+  const isAdmin = meData?.user?.role === "ADMIN";
 
   // Доступные модели по провайдеру
   const OPENAI_MODELS = [
@@ -325,10 +331,30 @@ export default function AiAssistantPage() {
 
   /* ─── render ────────────────────────────────────────────── */
 
-  if (!settings) {
+  if (!settings || meData === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-zinc-400">Загрузка...</div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="w-full max-w-sm rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10 text-center">
+          <div className="text-lg font-semibold text-zinc-900 mb-2">Только для администраторов</div>
+          <p className="text-sm text-zinc-500 mb-4">
+            Управление настройками ИИ доступно только администраторам платформы.
+            Для настройки ваших инструкций и базы знаний перейдите в личный кабинет.
+          </p>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-700"
+          >
+            Перейти в личный кабинет
+          </button>
+        </div>
       </div>
     );
   }
@@ -346,12 +372,20 @@ export default function AiAssistantPage() {
               Настройка ИИ-ассистента для ответов в чатах
             </p>
           </div>
-          <button
-            onClick={() => router.push("/")}
-            className="rounded-xl bg-zinc-200/80 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-900/10 hover:bg-zinc-200/90"
-          >
-            Назад к чатам
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="rounded-xl bg-zinc-200/80 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-900/10 hover:bg-zinc-200/90"
+            >
+              Кабинет
+            </button>
+            <button
+              onClick={() => router.push("/")}
+              className="rounded-xl bg-zinc-200/80 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-900/10 hover:bg-zinc-200/90"
+            >
+              Чаты
+            </button>
+          </div>
         </div>
 
         {/* ── Основные настройки ── */}

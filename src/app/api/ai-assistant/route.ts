@@ -1,12 +1,12 @@
 // src/app/api/ai-assistant/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireAdmin } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** GET — получить текущие настройки AI-ассистента */
+/** GET — получить текущие настройки AI-ассистента (доступно всем авторизованным) */
 export async function GET(req: Request) {
   const guard = await requireAuth(req);
   if (guard) return guard;
@@ -36,9 +36,9 @@ export async function GET(req: Request) {
   });
 }
 
-/** PUT — обновить настройки AI-ассистента */
+/** PUT — обновить настройки AI-ассистента (только для ADMIN) */
 export async function PUT(req: Request) {
-  const guard = await requireAuth(req);
+  const guard = await requireAdmin(req);
   if (guard) return guard;
 
   const body = await req.json().catch(() => null);

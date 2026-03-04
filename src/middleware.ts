@@ -7,12 +7,13 @@ const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "crm_session";
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // allow next internals, api, auth, static
+  // allow next internals, api, auth pages, static
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
     pathname === "/favicon.ico" ||
-    pathname === "/login"
+    pathname === "/login" ||
+    pathname === "/register"
   ) {
     return NextResponse.next();
   }
