@@ -77,7 +77,7 @@ export async function POST(req: Request, ctx: Ctx) {
         text: storedText,
         sentAt: now,
         isRead: true,
-        raw: { mock: true, source: "crm_send" },
+        raw: { mock: true, source: "crm_send", crmSource: "manager" },
       },
     });
 
@@ -155,7 +155,7 @@ export async function POST(req: Request, ctx: Ctx) {
       text,
       sentAt: now,
       isRead: true,
-      raw: { ...(avitoResp ?? { source: "avito_send" }) },
+      raw: { ...(avitoResp ?? {}), crmSource: "manager" },
     },
   });
 
