@@ -35,11 +35,11 @@ const EnvSchema = z.object({
   // куда по умолчанию складываем новые чаты (пока бот не подключен — MANAGER)
   AVITO_DEFAULT_STATUS: z.enum(["BOT", "MANAGER"]).default("BOT"),
 
-  // Avito
-  AVITO_CLIENT_ID: z.string().min(1).optional(),
-  AVITO_CLIENT_SECRET: z.string().min(1).optional(),
-  AVITO_ACCOUNT_ID: z.coerce.number().int().positive().optional(),
-  AVITO_REDIRECT_URI: z.string().url().optional(),
+  // Avito (опционально — пользователи задают свои ключи в личном кабинете)
+  AVITO_CLIENT_ID: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional()),
+  AVITO_CLIENT_SECRET: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional()),
+  AVITO_ACCOUNT_ID: z.preprocess((v) => (v === "" || v === "0" ? undefined : v), z.coerce.number().int().positive().optional()),
+  AVITO_REDIRECT_URI: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
 
   // (на будущее, чтобы bot.ts не был “вечно skipped”)
   N8N_BOT_WEBHOOK_URL: z.string().optional(),
@@ -56,15 +56,12 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 
-// Если НЕ mock — требуем Avito креды
-if (!env.MOCK_MODE) {
-  const missing: string[] = [];
-  if (!env.AVITO_CLIENT_ID) missing.push("AVITO_CLIENT_ID");
-  if (!env.AVITO_CLIENT_SECRET) missing.push("AVITO_CLIENT_SECRET");
-  if (!env.AVITO_ACCOUNT_ID) missing.push("AVITO_ACCOUNT_ID");
-  if (missing.length) {
-    throw new Error(`Missing Avito env vars (MOCK_MODE=false): ${missing.join(", ")}`);
-  }
+// Avito-ключи теперь задаются per-user в личном кабинете — глобальные опциональны
+if (!env.MOCK_MODE && (!env.AVITO_CLIENT_ID || !env.AVITO_CLIENT_SECRET || !env.AVITO_ACCOUNT_ID)) {
+  console.warn(
+    "[env] MOCK_MODE=false, но глобальные AVITO_CLIENT_ID/SECRET/ACCOUNT_ID не заданы. " +
+    "Пользователи должны указать свои Avito-ключи в личном кабинете.",
+  );
 }
 export function assertAvitoEnv() {
   const missing: string[] = [];
