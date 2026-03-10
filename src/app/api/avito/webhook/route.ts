@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { publish } from "@/lib/realtime";
-import { avitoGetChatInfo, avitoSendTextMessage, avitoGetItemInfo } from "@/lib/avito";
+import { avitoGetChatInfo, avitoSendTextMessage, avitoGetItemInfo, getAvitoCredentials } from "@/lib/avito";
 import { pickFirstString, pickFirstNumber } from "@/lib/utils";
 import { getAssistantReply, ESCALATE_MARKER } from "@/lib/openai";
 
@@ -639,7 +639,7 @@ export async function POST(req: Request) {
   }
 
   if (avitoChatId) {
-    const accountIdNum = Number(env.AVITO_ACCOUNT_ID ?? 0);
+    const accountIdNum = await getAvitoCredentials().then((c) => c.accountId).catch(() => Number(env.AVITO_ACCOUNT_ID ?? 0));
 
     const direction =
       avitoMessageId && authorId && accountIdNum && Number(authorId) === accountIdNum ? "OUT" : "IN";

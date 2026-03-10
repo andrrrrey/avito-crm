@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { avitoListMessages } from "@/lib/avito";
+import { avitoListMessages, getAvitoCredentials } from "@/lib/avito";
 import { pickFirstString, pickFirstNumber } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -118,6 +118,8 @@ async function refreshFromAvito(chat: { id: string; avitoChatId: string | null; 
 
   const now = new Date();
 
+  const myId = await getAvitoCredentials().then((c) => c.accountId).catch(() => Number(env.AVITO_ACCOUNT_ID));
+
   const mapped = avitoMessages
     .map((m: any) => {
       const avitoMessageId = pickFirstString(m?.id, m?.message_id, m?.value?.id, m?.message?.id);
@@ -138,8 +140,6 @@ async function refreshFromAvito(chat: { id: string; avitoChatId: string | null; 
           : typeof authorIdRaw === "string"
             ? Number(authorIdRaw)
             : NaN;
-
-      const myId = Number(env.AVITO_ACCOUNT_ID);
 
       const direction =
         Number.isFinite(authorIdNum) && Number.isFinite(myId) && authorIdNum === myId ? "OUT" : "IN";
