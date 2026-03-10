@@ -1,10 +1,10 @@
-// src/middleware.ts
+// src/proxy.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "crm_session";
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // allow next internals, api, auth pages, static
