@@ -7,6 +7,49 @@ const AVITO_BASE = "https://api.avito.ru";
 // ✅ добавили items:info (нужно для /core/v1/.../items/{item_id})
 const DEFAULT_SCOPE = "messenger:read messenger:write items:info";
 
+/**
+ * Возвращает Avito-credentials: сначала из env, потом из БД (первый пользователь с заполненными ключами).
+ * Это позволяет задавать ключи как в .env, так и в Личном кабинете.
+ */
+export async function getAvitoCredentials(): Promise<{
+  clientId: string;
+  clientSecret: string;
+  accountId: number;
+}> {
+  if (env.AVITO_CLIENT_ID && env.AVITO_CLIENT_SECRET && env.AVITO_ACCOUNT_ID) {
+    return {
+      clientId: env.AVITO_CLIENT_ID,
+      clientSecret: env.AVITO_CLIENT_SECRET,
+      accountId: env.AVITO_ACCOUNT_ID,
+    };
+  }
+
+  const user = await prisma.user.findFirst({
+    where: {
+      avitoClientId: { not: null },
+      avitoClientSecret: { not: null },
+      avitoAccountId: { not: null },
+    },
+    select: {
+      avitoClientId: true,
+      avitoClientSecret: true,
+      avitoAccountId: true,
+    },
+  });
+
+  if (user?.avitoClientId && user?.avitoClientSecret && user?.avitoAccountId) {
+    return {
+      clientId: user.avitoClientId,
+      clientSecret: user.avitoClientSecret,
+      accountId: user.avitoAccountId,
+    };
+  }
+
+  throw new Error(
+    "Avito credentials not configured. Please set AVITO_CLIENT_ID, AVITO_CLIENT_SECRET, AVITO_ACCOUNT_ID in .env or in personal settings."
+  );
+}
+
 type TokenResp = {
   access_token: string;
   expires_in: number;
@@ -37,10 +80,12 @@ async function getAccessToken(): Promise<string> {
     return st.accessToken;
   }
 
+  const creds = await getAvitoCredentials();
+
   const form = new URLSearchParams();
   form.set("grant_type", "client_credentials");
-  form.set("client_id", env.AVITO_CLIENT_ID!);
-  form.set("client_secret", env.AVITO_CLIENT_SECRET!);
+  form.set("client_id", creds.clientId);
+  form.set("client_secret", creds.clientSecret);
   form.set("scope", DEFAULT_SCOPE);
 
   const r = await fetch(`${AVITO_BASE}/token/`, {
@@ -107,7 +152,7 @@ export async function avitoListChats(params?: { limit?: number; offset?: number 
   const q = qs.toString();
   const suffix = q ? `?${q}` : "";
 
-  const accountId = env.AVITO_ACCOUNT_ID;
+  const { accountId } = await getAvitoCredentials();
 
   // v3
   try {
@@ -135,8 +180,7 @@ export async function avitoListChats(params?: { limit?: number; offset?: number 
 
 export async function avitoGetChatInfo(avitoChatId: string) {
   const chatId = encodePathSegmentStrict(avitoChatId);
-  const accountId = env.AVITO_ACCOUNT_ID;
-  if (!accountId) throw new Error("AVITO_ACCOUNT_ID is missing");
+  const { accountId } = await getAvitoCredentials();
 
   const endpoints = [
     `/messenger/v2/accounts/${accountId}/chats/${chatId}`,
@@ -168,19 +212,20 @@ export async function avitoListMessages(avitoChatId: string, params?: { limit?: 
   const q = qs.toString();
 
   const chatId = encodePathSegmentStrict(avitoChatId);
+  const { accountId } = await getAvitoCredentials();
 
   try {
     return await avitoFetch(
-      `/messenger/v3/accounts/${env.AVITO_ACCOUNT_ID}/chats/${chatId}/messages${q ? `?${q}` : ""}`
+      `/messenger/v3/accounts/${accountId}/chats/${chatId}/messages${q ? `?${q}` : ""}`
     );
   } catch {
     try {
       return await avitoFetch(
-        `/messenger/v2/accounts/${env.AVITO_ACCOUNT_ID}/chats/${chatId}/messages${q ? `?${q}` : ""}`
+        `/messenger/v2/accounts/${accountId}/chats/${chatId}/messages${q ? `?${q}` : ""}`
       );
     } catch {
       return avitoFetch(
-        `/messenger/v1/accounts/${env.AVITO_ACCOUNT_ID}/chats/${chatId}/messages${q ? `?${q}` : ""}`
+        `/messenger/v1/accounts/${accountId}/chats/${chatId}/messages${q ? `?${q}` : ""}`
       );
     }
   }
@@ -188,10 +233,11 @@ export async function avitoListMessages(avitoChatId: string, params?: { limit?: 
 
 export async function avitoSendTextMessage(avitoChatId: string, text: string) {
   const chatId = encodePathSegmentStrict(avitoChatId);
+  const { accountId } = await getAvitoCredentials();
 
   const body = { type: "text", message: { text } };
 
-  return avitoFetch(`/messenger/v1/accounts/${env.AVITO_ACCOUNT_ID}/chats/${chatId}/messages`, {
+  return avitoFetch(`/messenger/v1/accounts/${accountId}/chats/${chatId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -209,8 +255,7 @@ export async function avitoGetItemInfo(itemId: number): Promise<{
   url: string | null;
   raw: any;
 }> {
-  const accountId = env.AVITO_ACCOUNT_ID;
-  if (!accountId) throw new Error("AVITO_ACCOUNT_ID is missing");
+  const { accountId } = await getAvitoCredentials();
 
   const paths = [
     `/core/v1/accounts/${accountId}/items/${itemId}/`,
@@ -340,8 +385,7 @@ export async function avitoGetItemFromItemsListCached(
 
 export async function avitoMarkChatRead(avitoChatId: string, lastMessageId?: string) {
   const chatId = encodePathSegmentStrict(avitoChatId);
-  const accountId = env.AVITO_ACCOUNT_ID;
-  if (!accountId) throw new Error("AVITO_ACCOUNT_ID is missing");
+  const { accountId } = await getAvitoCredentials();
 
   const bodies: Array<any> = [
     undefined,
@@ -405,8 +449,7 @@ export type AvitoWebhookSubscription = {
  */
 export async function avitoSubscribeWebhook(webhookUrl: string): Promise<AvitoWebhookSubscription> {
   // secret — это client_secret из OAuth-конфигурации
-  const secret = env.AVITO_CLIENT_SECRET;
-  if (!secret) throw new Error("AVITO_CLIENT_SECRET is missing — нужен для подписки на вебхук");
+  const { clientSecret: secret } = await getAvitoCredentials();
 
   const body = JSON.stringify({ url: webhookUrl, secret });
   const headers = { "Content-Type": "application/json" };
