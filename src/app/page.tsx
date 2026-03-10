@@ -140,16 +140,7 @@ function formatDayHeader(iso: string) {
 
 function IconSparkles({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .962L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z" />
     </svg>
   );
@@ -157,16 +148,7 @@ function IconSparkles({ className }: { className?: string }) {
 
 function IconSearch({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="11" cy="11" r="8" />
       <path d="m21 21-4.3-4.3" />
     </svg>
@@ -175,16 +157,7 @@ function IconSearch({ className }: { className?: string }) {
 
 function IconPaperclip({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
     </svg>
   );
@@ -192,16 +165,7 @@ function IconPaperclip({ className }: { className?: string }) {
 
 function IconSend({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="m22 2-7 20-4-9-9-4Z" />
       <path d="M22 2 11 13" />
     </svg>
@@ -210,18 +174,28 @@ function IconSend({ className }: { className?: string }) {
 
 function IconCheckCheck({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 6 7 17l-5-5" />
       <path d="m22 10-7.5 7.5L13 16" />
+    </svg>
+  );
+}
+
+function IconArrowLeft({ className }: { className?: string }) {
+  return (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m12 19-7-7 7-7" />
+      <path d="M19 12H5" />
+    </svg>
+  );
+}
+
+function IconMenu({ className }: { className?: string }) {
+  return (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" x2="20" y1="12" y2="12" />
+      <line x1="4" x2="20" y1="6" y2="6" />
+      <line x1="4" x2="20" y1="18" y2="18" />
     </svg>
   );
 }
@@ -292,7 +266,7 @@ const ChatCard = React.memo(function ChatCard({
         "p-3 bg-white rounded-2xl cursor-pointer transition outline-none",
         selected
           ? "border-2 border-green-400 shadow-sm"
-          : "border border-zinc-100 hover:border-zinc-300"
+          : "border border-zinc-100 active:bg-zinc-50 hover:border-zinc-300"
       )}
     >
       <div className="flex justify-between items-start mb-1">
@@ -371,7 +345,7 @@ const MessageBubble = React.memo(function MessageBubble({
 
   if (isIn) {
     return (
-      <div className="max-w-[70%]">
+      <div className="max-w-[88%] sm:max-w-[80%] md:max-w-[70%]">
         <div
           className={cn(
             "bg-white border border-zinc-100 rounded-2xl rounded-tl-none p-3 shadow-sm",
@@ -390,7 +364,7 @@ const MessageBubble = React.memo(function MessageBubble({
   }
 
   return (
-    <div className="max-w-[70%] ml-auto text-right">
+    <div className="max-w-[88%] sm:max-w-[80%] md:max-w-[70%] ml-auto text-right">
       <div
         className={cn(
           "rounded-2xl rounded-tr-none p-3 shadow-md inline-block text-left",
@@ -435,10 +409,10 @@ function Composer({
   }, [draft, sending, onSend]);
 
   return (
-    <div className="p-4 bg-white border-t border-zinc-100 shrink-0">
-      <div className="flex items-center gap-2 bg-zinc-50 rounded-2xl p-2 border border-zinc-200">
+    <div className="p-3 md:p-4 bg-white border-t border-zinc-100 shrink-0">
+      <div className="flex items-center gap-2 bg-zinc-50 rounded-2xl p-1.5 md:p-2 border border-zinc-200">
         <button
-          className="p-2 text-zinc-400 hover:text-zinc-600 transition shrink-0"
+          className="p-1.5 md:p-2 text-zinc-400 hover:text-zinc-600 transition shrink-0"
           title="Прикрепить файл"
           type="button"
         >
@@ -449,7 +423,7 @@ function Composer({
           onChange={(e) => setDraft(e.target.value)}
           rows={1}
           placeholder="Написать сообщение..."
-          className="flex-1 bg-transparent border-none outline-none text-sm p-2 resize-none leading-5"
+          className="flex-1 bg-transparent border-none outline-none text-sm p-1.5 md:p-2 resize-none leading-5"
           style={{ minHeight: "20px", maxHeight: "120px" }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -462,10 +436,10 @@ function Composer({
           onClick={handleSend}
           disabled={sending || !draft.trim()}
           type="button"
-          className="h-10 w-10 rounded-xl bg-green-400 text-zinc-950 flex items-center justify-center hover:brightness-95 transition disabled:opacity-50 shrink-0"
+          className="h-9 w-9 md:h-10 md:w-10 rounded-xl bg-green-400 text-zinc-950 flex items-center justify-center hover:brightness-95 transition disabled:opacity-50 shrink-0"
           title="Отправить"
         >
-          <IconSend className="h-5 w-5" />
+          <IconSend className="h-4 w-4 md:h-5 md:w-5" />
         </button>
       </div>
     </div>
@@ -482,6 +456,10 @@ function PageInner() {
   // Sidebar list ref + per-tab scroll position
   const sidebarListRef = useRef<HTMLDivElement | null>(null);
   const tabScrollRef = useRef<Record<string, number>>({});
+
+  // Mobile: show/hide sidebar independently of selected chat
+  // On mobile, when chat is open, sidebar is hidden; user taps "Назад" to go back
+  const showChatOnMobile = Boolean(selectedChatId);
 
   // Active tab
   const [activeTab, setActiveTab] = useState<ChatStatus>("BOT");
@@ -1039,6 +1017,12 @@ function PageInner() {
     }
   }
 
+  const clearSelectedChat = useCallback(() => {
+    const u = new URL(window.location.href);
+    u.searchParams.delete("chat");
+    router.replace(u.pathname + (u.search || ""));
+  }, [router]);
+
   const selectChat = useCallback(
     async (id: string) => {
       const u = new URL(window.location.href);
@@ -1122,35 +1106,56 @@ function PageInner() {
     [selectedChatId, mutateMsgs, mutateBOT, mutateMAN]
   );
 
-  // Total unread counts per tab (for badge display)
-  const botUnread = useMemo(() => botChatsUI.reduce((s, c) => s + (c.unreadCount ?? 0), 0), [botChatsUI]);
-  const manUnread = useMemo(() => manChatsUI.reduce((s, c) => s + (c.unreadCount ?? 0), 0), [manChatsUI]);
+  // Total unread counts per tab
+  const botUnread = useMemo(
+    () => botChatsUI.reduce((s, c) => s + (c.unreadCount ?? 0), 0),
+    [botChatsUI]
+  );
+  const manUnread = useMemo(
+    () => manChatsUI.reduce((s, c) => s + (c.unreadCount ?? 0), 0),
+    [manChatsUI]
+  );
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
+    /*
+     * Outer wrapper:
+     *   mobile  – no padding, fills screen
+     *   sm      – small padding so background peeks through
+     *   lg      – full 20px padding as in desktop design
+     */
     <div
-      className="h-screen p-5 bg-cover bg-center"
+      className="h-screen p-0 sm:p-2 lg:p-5 bg-cover bg-center"
       style={{
         backgroundImage:
           "url('https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/8e249747-11d9-4c29-9017-590f07779c2e_3840w.jpg')",
         backgroundColor: "#e4e4e7",
       }}
     >
-      <div className="h-full overflow-hidden shadow-2xl max-w-7xl bg-white rounded-[30px] mx-auto flex flex-col">
+      {/*
+       * App card:
+       *   mobile  – full screen, no rounded corners, no shadow
+       *   sm      – rounded-2xl, shadow visible
+       *   lg      – rounded-[30px] as per design
+       */}
+      <div className="h-full overflow-hidden bg-white flex flex-col shadow-none sm:shadow-2xl rounded-none sm:rounded-2xl lg:rounded-[30px] max-w-7xl mx-auto">
 
         {/* ── Header ── */}
-        <header className="border-b border-zinc-100 px-6 py-4 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 flex bg-green-400 rounded-full items-center justify-center shrink-0">
-              <IconSparkles className="h-4 w-4 text-zinc-900" />
+        <header className="border-b border-zinc-100 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4 flex items-center justify-between shrink-0 gap-2">
+          {/* Left: logo + status badges */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="h-7 w-7 sm:h-8 sm:w-8 flex bg-green-400 rounded-full items-center justify-center shrink-0">
+              <IconSparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-zinc-900" />
             </div>
-            <span className="text-lg tracking-tight font-medium font-geist">AITOCRM</span>
+            <span className="text-base sm:text-lg tracking-tight font-medium font-geist">
+              AITOCRM
+            </span>
 
-            {/* RT status dot */}
+            {/* Status badges – hidden on smallest screens */}
             <span
               className={cn(
-                "text-[10px] px-2 py-0.5 rounded-full font-medium font-geist",
+                "hidden sm:inline-flex text-[10px] px-2 py-0.5 rounded-full font-medium font-geist",
                 rtConnected
                   ? "bg-emerald-100 text-emerald-700"
                   : "bg-zinc-100 text-zinc-500"
@@ -1160,18 +1165,19 @@ function PageInner() {
             </span>
 
             {IS_MOCK && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium font-geist">
+              <span className="hidden sm:inline-flex text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium font-geist">
                 MOCK
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* AI status */}
+          {/* Right: controls + nav */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* AI + Webhook – visible from md */}
             {webhookDiag && (
               <span
                 className={cn(
-                  "text-[10px] px-2 py-0.5 rounded-full font-medium font-geist",
+                  "hidden md:inline-flex text-[10px] px-2 py-0.5 rounded-full font-medium font-geist",
                   webhookDiag.aiConfigured
                     ? "bg-emerald-100 text-emerald-700"
                     : "bg-rose-100 text-rose-700"
@@ -1181,13 +1187,12 @@ function PageInner() {
               </span>
             )}
 
-            {/* Webhook toggle */}
             {!IS_MOCK && (
               <button
                 onClick={toggleWebhookSubscription}
                 disabled={webhookLoading}
                 className={cn(
-                  "text-[10px] px-2 py-0.5 rounded-full font-medium transition font-geist",
+                  "hidden md:inline-flex text-[10px] px-2 py-0.5 rounded-full font-medium transition font-geist",
                   webhookSubscribed
                     ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                     : "bg-amber-100 text-amber-700 hover:bg-amber-200",
@@ -1203,37 +1208,41 @@ function PageInner() {
               </button>
             )}
 
-            {/* Diagnostics toggle */}
+            {/* Diagnostics – md+ */}
             {webhookDiag && !webhookDiag.healthy && (
               <button
                 onClick={() => setShowDiag((v) => !v)}
-                className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium hover:bg-rose-200 transition font-geist"
+                className="hidden md:inline-flex text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium hover:bg-rose-200 transition font-geist"
               >
                 {webhookDiag.issues?.length ?? 0} проблем
               </button>
             )}
 
+            {/* Nav links */}
             <a
               href="/dashboard"
-              className="px-3 py-1.5 text-xs font-medium rounded-full bg-zinc-100 hover:bg-zinc-200 transition font-geist"
+              className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-zinc-100 hover:bg-zinc-200 transition font-geist whitespace-nowrap"
             >
               Кабинет
             </a>
             <a
               href="/ai-assistant"
-              className="px-3 py-1.5 text-xs font-medium rounded-full bg-zinc-950 text-white hover:bg-zinc-800 transition font-geist"
+              className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-zinc-950 text-white hover:bg-zinc-800 transition font-geist whitespace-nowrap"
             >
-              AI Ассистент
+              <span className="hidden sm:inline">AI Ассистент</span>
+              <span className="sm:hidden">AI</span>
             </a>
           </div>
         </header>
 
         {/* ── Diagnostics / error banners ── */}
         {(showDiag && (webhookDiag?.issues?.length ?? 0) > 0) || webhookError ? (
-          <div className="px-6 pb-3 shrink-0 space-y-2">
+          <div className="px-3 md:px-6 pb-2 shrink-0 space-y-2">
             {showDiag && (webhookDiag?.issues?.length ?? 0) > 0 && (
               <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 space-y-1">
-                <div className="text-xs font-semibold text-rose-900">Диагностика конфигурации:</div>
+                <div className="text-xs font-semibold text-rose-900">
+                  Диагностика конфигурации:
+                </div>
                 {webhookDiag.issues.map((issue: string, i: number) => (
                   <div key={i} className="text-xs text-rose-800">
                     • {issue}
@@ -1256,35 +1265,58 @@ function PageInner() {
         ) : null}
 
         {/* ── Body ── */}
-        <div className="flex-1 flex overflow-hidden p-2 gap-2 min-h-0">
+        {/*
+         * Layout strategy:
+         *   mobile  – only ONE panel visible at a time (sidebar OR chat)
+         *   md+     – sidebar + chat side by side
+         *
+         * The `hidden`/`flex` switches below control which panel is shown on mobile.
+         */}
+        <div className="flex-1 flex overflow-hidden min-h-0 p-0 sm:p-1.5 md:p-2 gap-0 sm:gap-1.5 md:gap-2">
 
-          {/* ── Left sidebar: chat list ── */}
-          <aside className="w-80 shrink-0 flex flex-col gap-3 bg-zinc-50 rounded-[24px] border border-zinc-200/50 p-4">
-
+          {/* ── Left sidebar ── */}
+          <aside
+            className={cn(
+              // Base layout
+              "flex flex-col gap-2.5 md:gap-3 bg-zinc-50 p-3 md:p-4",
+              // Mobile: full width, shown only when no chat is open
+              // md+: fixed width, always shown
+              showChatOnMobile ? "hidden md:flex" : "flex w-full",
+              // Width on md+
+              "md:w-64 lg:w-80 md:shrink-0",
+              // Border & rounded: none on mobile (full-screen feel), styled on md+
+              "md:border md:border-zinc-200/50 md:rounded-[20px] lg:rounded-[24px]"
+            )}
+          >
             {/* Tab switcher */}
             <div className="flex items-center gap-1 p-1 bg-zinc-100 rounded-2xl shrink-0">
               {(["BOT", "MANAGER", "INACTIVE"] as ChatStatus[]).map((tab) => {
-                const label =
+                // Shorter labels on small screens
+                const labelFull =
                   tab === "BOT"
                     ? "ИИ отвечает"
                     : tab === "MANAGER"
                       ? "Менеджер"
                       : "Неактивные";
-                const unread = tab === "BOT" ? botUnread : tab === "MANAGER" ? manUnread : 0;
+                const labelShort =
+                  tab === "BOT" ? "ИИ" : tab === "MANAGER" ? "Менеджер" : "Неактив";
+                const unread =
+                  tab === "BOT" ? botUnread : tab === "MANAGER" ? manUnread : 0;
                 return (
                   <button
                     key={tab}
                     onClick={() => handleTabChange(tab)}
                     className={cn(
-                      "flex-1 py-2 text-xs rounded-xl transition font-geist relative",
+                      "flex-1 py-1.5 sm:py-2 text-[11px] sm:text-xs rounded-xl transition font-geist",
                       activeTab === tab
                         ? "bg-white shadow-sm font-semibold"
                         : "font-medium text-zinc-500 hover:text-zinc-700"
                     )}
                   >
-                    {label}
+                    <span className="hidden sm:inline">{labelFull}</span>
+                    <span className="sm:hidden">{labelShort}</span>
                     {unread > 0 && (
-                      <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold px-1">
+                      <span className="ml-1 inline-flex items-center justify-center min-w-[14px] sm:min-w-[16px] h-3.5 sm:h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold px-1">
                         {unread}
                       </span>
                     )}
@@ -1317,7 +1349,7 @@ function PageInner() {
                     },
                   }))
                 }
-                className="text-[10px] px-2 py-1 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition font-geist"
+                className="text-[10px] px-2 py-1 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 active:bg-zinc-300 transition font-geist"
               >
                 {filters[activeTab].sortOrder === "desc" ? "↓ Новые" : "↑ Старые"}
               </button>
@@ -1335,7 +1367,7 @@ function PageInner() {
                   "text-[10px] px-2 py-1 rounded-lg transition font-geist",
                   filters[activeTab].priceSort === "desc"
                     ? "bg-zinc-800 text-white"
-                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 active:bg-zinc-300"
                 )}
               >
                 ₽↓ Дороже
@@ -1354,7 +1386,7 @@ function PageInner() {
                   "text-[10px] px-2 py-1 rounded-lg transition font-geist",
                   filters[activeTab].priceSort === "asc"
                     ? "bg-zinc-800 text-white"
-                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 active:bg-zinc-300"
                 )}
               >
                 ₽↑ Дешевле
@@ -1374,7 +1406,7 @@ function PageInner() {
                     "text-[10px] px-2 py-1 rounded-lg transition font-geist",
                     filters[activeTab].unreadOnly
                       ? "bg-rose-500 text-white"
-                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 active:bg-zinc-300"
                   )}
                 >
                   Непрочит.
@@ -1385,7 +1417,7 @@ function PageInner() {
             {/* Chat cards list */}
             <div
               ref={sidebarListRef}
-              className="flex-1 overflow-y-auto space-y-2 min-h-0 pr-0.5"
+              className="flex-1 overflow-y-auto space-y-2 min-h-0"
             >
               {activeChats.length === 0 ? (
                 <div className="text-sm text-zinc-400 text-center py-10 font-geist">
@@ -1419,12 +1451,21 @@ function PageInner() {
           </aside>
 
           {/* ── Right: Chat window ── */}
-          <main className="flex-1 flex flex-col bg-zinc-50 rounded-[24px] border border-zinc-200/50 overflow-hidden min-h-0 min-w-0">
+          <main
+            className={cn(
+              "flex-col bg-zinc-50 overflow-hidden min-h-0 min-w-0 flex-1",
+              // Mobile: shown only when chat is open; md+ always shown
+              showChatOnMobile ? "flex" : "hidden md:flex",
+              // Border & rounded on md+
+              "md:border md:border-zinc-200/50 md:rounded-[20px] lg:rounded-[24px]"
+            )}
+          >
             {!selectedChat ? (
+              /* Empty state – only visible on md+ (mobile never shows this panel without a chat) */
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center px-8">
-                  <div className="h-16 w-16 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <IconSparkles className="h-7 w-7 text-zinc-400" />
+                  <div className="h-14 w-14 md:h-16 md:w-16 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <IconSparkles className="h-6 w-6 md:h-7 md:w-7 text-zinc-400" />
                   </div>
                   <div className="text-base font-bold text-zinc-900 font-geist">
                     Выберите чат
@@ -1438,16 +1479,27 @@ function PageInner() {
               <div className="flex flex-col h-full min-h-0">
 
                 {/* Chat header */}
-                <div className="px-6 py-4 bg-white border-b border-zinc-100 flex items-center justify-between shrink-0">
-                  <div className="flex items-center gap-3 min-w-0 mr-4">
-                    <div className="h-10 w-10 rounded-full bg-zinc-100 flex items-center justify-center font-bold text-zinc-500 text-sm shrink-0">
+                <div className="px-3 sm:px-4 md:px-6 py-3 md:py-4 bg-white border-b border-zinc-100 flex items-center justify-between shrink-0 gap-2">
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    {/* Back button – mobile only */}
+                    <button
+                      onClick={clearSelectedChat}
+                      className="flex md:hidden items-center justify-center h-8 w-8 rounded-full hover:bg-zinc-100 active:bg-zinc-200 transition shrink-0"
+                      title="Назад"
+                    >
+                      <IconArrowLeft className="h-5 w-5 text-zinc-600" />
+                    </button>
+
+                    {/* Avatar */}
+                    <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-zinc-100 flex items-center justify-center font-bold text-zinc-500 text-xs sm:text-sm shrink-0">
                       {(selectedChat.customerName ?? "?").charAt(0).toUpperCase()}
                     </div>
+
                     <div className="min-w-0">
                       <h2 className="text-sm font-bold font-geist truncate">
                         {selectedChat.customerName ?? "Клиент"}
                       </h2>
-                      <p className="text-[11px] text-zinc-500 truncate">
+                      <p className="text-[11px] text-zinc-500 truncate hidden sm:block">
                         {selectedChat.itemTitle ?? "Без названия"}{" "}
                         • {formatPrice(selectedChat.price)}
                         {selectedChat.adUrl && (
@@ -1463,26 +1515,18 @@ function PageInner() {
                             </a>
                           </>
                         )}
-                        {selectedChat.chatUrl && (
-                          <>
-                            {" • "}
-                            <a
-                              href={selectedChat.chatUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-sky-600 hover:text-sky-700"
-                            >
-                              чат Avito
-                            </a>
-                          </>
-                        )}
+                      </p>
+                      {/* Compact price on mobile */}
+                      <p className="text-[10px] text-zinc-400 truncate sm:hidden">
+                        {formatPrice(selectedChat.price)}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-wrap justify-end">
                     {selectedChat.unreadCount > 0 && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold font-geist">
+                      <span className="hidden sm:inline-flex text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold font-geist">
                         {selectedChat.unreadCount} непроч.
                       </span>
                     )}
@@ -1490,28 +1534,26 @@ function PageInner() {
                     {selectedChat.status === "MANAGER" && (
                       <button
                         onClick={() => finishDialog(selectedChat)}
-                        className="px-3 py-1.5 text-[11px] font-medium rounded-lg border border-zinc-200 hover:bg-zinc-50 font-geist transition"
+                        className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] font-medium rounded-lg border border-zinc-200 hover:bg-zinc-50 active:bg-zinc-100 font-geist transition"
                       >
-                        Завершить диалог
+                        <span className="hidden sm:inline">Завершить диалог</span>
+                        <span className="sm:hidden">Завершить</span>
                       </button>
                     )}
 
                     {selectedChat.status === "INACTIVE" && (
                       <button
                         onClick={() => reactivateChat(selectedChat)}
-                        className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 font-geist transition"
+                        className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] font-medium rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 active:bg-emerald-300 font-geist transition"
                       >
                         Реактивировать
                       </button>
                     )}
 
+                    {/* Close button – desktop only (mobile uses back arrow) */}
                     <button
-                      onClick={() => {
-                        const u = new URL(window.location.href);
-                        u.searchParams.delete("chat");
-                        router.replace(u.pathname + (u.search || ""));
-                      }}
-                      className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 font-geist transition"
+                      onClick={clearSelectedChat}
+                      className="hidden md:flex px-3 py-1.5 text-[11px] font-medium rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 font-geist transition"
                     >
                       Закрыть
                     </button>
@@ -1522,7 +1564,7 @@ function PageInner() {
                 <div
                   ref={messagesRef}
                   onScroll={handleScroll}
-                  className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0"
+                  className="flex-1 overflow-y-auto p-4 sm:p-5 md:p-6 space-y-3 sm:space-y-4 min-h-0"
                 >
                   {refreshing && (
                     <div className="flex justify-center mb-2">
