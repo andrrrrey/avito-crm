@@ -565,7 +565,7 @@ export async function avitoGetWebhookSubscriptions(): Promise<AvitoWebhookSubscr
     }
   }
 
-  throw new Error(
-    `Avito get webhook subscriptions failed: ${String(lastErr?.message ?? lastErr)}`
-  );
+  // Avito не поддерживает GET-проверку подписок (оба эндпоинта 404).
+  // Возвращаем пустой массив — вызывающий код использует кэшированное состояние.
+  return [];
 }

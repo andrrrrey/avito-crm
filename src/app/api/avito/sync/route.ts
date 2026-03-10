@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthOrCron } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { avitoListChats, avitoGetItemInfo } from "@/lib/avito";
+import { avitoListChats, avitoGetItemInfo, getAvitoCredentials } from "@/lib/avito";
 import { pickFirstString, pickFirstNumber } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -378,6 +378,9 @@ export async function POST(req: Request) {
   const itemCache = new Map<number, { title: string | null; price: number | null; url: string | null }>();
   const MAX_ITEM_LOOKUPS = 120; // чтобы не улететь по лимитам
 
+  // Получаем реальный accountId (из env или из БД — личный кабинет)
+  const { accountId: myAccountId } = await getAvitoCredentials();
+
   while (pages < MAX_PAGES) {
     if (offset > MAX_OFFSET) break;
 
@@ -405,10 +408,8 @@ export async function POST(req: Request) {
         const avitoChatId = pickFirstString(c?.id, c?.chat_id, c?.chatId, c?.uid);
         if (!avitoChatId) continue;
 
-        const myId = Number(env.AVITO_ACCOUNT_ID);
-
         const customerName =
-          extractCustomerName(c, myId) ??
+          extractCustomerName(c, myAccountId) ??
           pickFirstString(c?.user?.name, c?.customer?.name, c?.users?.[0]?.name, c?.participants?.[0]?.name) ??
           null;
 
@@ -442,7 +443,7 @@ export async function POST(req: Request) {
 
         // ✅ ВАЖНО: не затираем price/title/url null-ом из messenger
         const updateData: any = {
-          accountId: Number(env.AVITO_ACCOUNT_ID ?? 0),
+          accountId: myAccountId,
           status: existing?.status ?? env.AVITO_DEFAULT_STATUS,
           pinned: existing?.pinned ?? false,
           customerName,
@@ -460,7 +461,7 @@ export async function POST(req: Request) {
           where: { avitoChatId },
           create: {
             avitoChatId,
-            accountId: Number(env.AVITO_ACCOUNT_ID ?? 0),
+            accountId: myAccountId,
             status: env.AVITO_DEFAULT_STATUS,
             pinned: existing?.pinned ?? false,
             customerName,
