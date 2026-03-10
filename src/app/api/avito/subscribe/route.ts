@@ -8,6 +8,7 @@ import {
   avitoSubscribeWebhook,
   avitoUnsubscribeWebhook,
   avitoGetWebhookSubscriptions,
+  getAvitoCredentials,
 } from "@/lib/avito";
 
 export const runtime = "nodejs";
@@ -49,10 +50,13 @@ async function getDiagnostics() {
     issues.push("PUBLIC_BASE_URL должен использовать HTTPS — Avito не принимает HTTP и самоподписанные сертификаты");
   }
 
-  // Avito credentials
-  if (!env.AVITO_CLIENT_ID) issues.push("AVITO_CLIENT_ID не задан");
-  if (!env.AVITO_CLIENT_SECRET) issues.push("AVITO_CLIENT_SECRET не задан");
-  if (!env.AVITO_ACCOUNT_ID) issues.push("AVITO_ACCOUNT_ID не задан");
+  // Avito credentials — проверяем env, иначе fallback на БД (личный кабинет)
+  const avitoCredentialsOk = await getAvitoCredentials().then(() => true).catch(() => false);
+  if (!avitoCredentialsOk) {
+    if (!env.AVITO_CLIENT_ID) issues.push("AVITO_CLIENT_ID не задан");
+    if (!env.AVITO_CLIENT_SECRET) issues.push("AVITO_CLIENT_SECRET не задан");
+    if (!env.AVITO_ACCOUNT_ID) issues.push("AVITO_ACCOUNT_ID не задан");
+  }
 
   // AI assistant
   const ai = await getAiSettings().catch(() => null);
@@ -65,7 +69,7 @@ async function getDiagnostics() {
 
   return {
     publicBaseUrl: base || null,
-    hasAvitoCredentials: !!(env.AVITO_CLIENT_ID && env.AVITO_CLIENT_SECRET && env.AVITO_ACCOUNT_ID),
+    hasAvitoCredentials: avitoCredentialsOk,
     aiEnabled: ai?.enabled ?? false,
     aiConfigured: !!(ai?.enabled && ai?.apiKey && ai?.model),
     issues,
