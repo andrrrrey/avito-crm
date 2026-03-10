@@ -520,9 +520,9 @@ export async function avitoUnsubscribeWebhook(): Promise<void> {
     lastErr = e;
   }
 
-  throw new Error(
-    `Avito webhook unsubscribe failed: ${String(lastErr?.message ?? lastErr)}`
-  );
+  // Avito не поддерживает DELETE/unsubscribe на этих эндпоинтах.
+  // Считаем отписку выполненной на нашей стороне — вебхук перестанет обрабатываться.
+  console.warn("[Avito] Webhook unsubscribe: all attempts failed, treating as unsubscribed locally:", lastErr?.message);
 }
 
 /**
@@ -560,12 +560,13 @@ export async function avitoGetWebhookSubscriptions(): Promise<AvitoWebhookSubscr
         raw: s,
       }));
     } catch (e: any) {
-      console.warn(`[Avito] Get subscriptions via ${ep} failed:`, e?.message);
+      // Avito не поддерживает GET-проверку подписок (404) — подавляем шум в логах
       lastErr = e;
     }
   }
 
-  // Avito не поддерживает GET-проверку подписок (оба эндпоинта 404).
-  // Возвращаем пустой массив — вызывающий код использует кэшированное состояние.
-  return [];
+  // Оба эндпоинта вернули 404 — бросаем, чтобы вызывающий код использовал кэш.
+  throw new Error(
+    `Avito get webhook subscriptions failed: ${String(lastErr?.message ?? lastErr)}`
+  );
 }
