@@ -24,10 +24,7 @@ type ChatItem = {
   status: ChatStatus;
   customerName: string | null;
   itemTitle: string | null;
-
-  // ✅ цена берется с сервера (из БД chat.price)
   price?: number | null;
-
   lastMessageAt: string | null;
   lastMessageText: string | null;
   adUrl: string | null;
@@ -40,16 +37,11 @@ type ChatItem = {
 type MessageItem = {
   id: string;
   text: string;
-
   direction?: "IN" | "OUT";
   sentAt?: string;
-
-  // важно для UI непрочитанных
   isRead?: boolean;
-
   author?: "CUSTOMER" | "BOT" | "MANAGER";
   createdAt?: string;
-
   raw?: any;
 };
 
@@ -60,13 +52,10 @@ const IS_MOCK = (() => {
 
 async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   const r = await fetch(input, { ...init, credentials: "include" });
-
-  // если сессия протухла/нет — отправляем на /login
   if (r.status === 401 && typeof window !== "undefined") {
     window.location.href = "/login";
     throw new Error("unauthorized");
   }
-
   return r;
 }
 
@@ -85,7 +74,7 @@ type RealtimeEvent = {
     chatId: string;
     direction: "IN" | "OUT";
     text: string;
-    sentAt: string; // ISO
+    sentAt: string;
     isRead: boolean;
   };
   chatSnapshot?: ChatItem;
@@ -98,12 +87,12 @@ function cn(...xs: Array<string | false | null | undefined>) {
 function formatTime(iso: string | null) {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  if (isToday) {
+    return d.toLocaleString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
 }
 
 function formatPrice(v?: number | null) {
@@ -138,10 +127,8 @@ function formatDayHeader(iso: string) {
   const today0 = startOfLocalDay(new Date()).getTime();
   const d0 = startOfLocalDay(d).getTime();
   const diffDays = Math.round((d0 - today0) / 86400000);
-
   if (diffDays === 0) return "Сегодня";
   if (diffDays === -1) return "Вчера";
-
   return d.toLocaleDateString("ru-RU", {
     day: "2-digit",
     month: "long",
@@ -149,113 +136,119 @@ function formatDayHeader(iso: string) {
   });
 }
 
-function Badge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center rounded-full bg-sky-600/10 px-2 py-0.5 text-xs font-medium text-sky-800 ring-1 ring-sky-700/20">
-      {children}
-    </span>
-  );
-}
+// ─── SVG Icons ───────────────────────────────────────────────────────────────
 
-function DangerBadge({ children }: { children: React.ReactNode }) {
+function IconSparkles({ className }: { className?: string }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-rose-600/10 px-2 py-0.5 text-xs font-medium text-rose-800 ring-1 ring-rose-700/20">
-      {children}
-    </span>
-  );
-}
-
-function SmallDangerBadge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center rounded-full bg-rose-600/10 px-1.5 py-0.5 text-[11px] font-medium text-rose-800 ring-1 ring-rose-700/20">
-      {children}
-    </span>
-  );
-}
-
-function Button({
-  children,
-  onClick,
-  disabled,
-  variant = "default",
-  className,
-  title,
-}: {
-  children: React.ReactNode;
-  onClick?: React.MouseEventHandler<HTMLButtonElement>;
-  disabled?: boolean;
-  variant?: "default" | "ghost" | "danger";
-  className?: string;
-  title?: string;
-}) {
-  const base =
-    "inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-sky-500/25 disabled:opacity-50 disabled:pointer-events-none";
-  const styles =
-    variant === "danger"
-      ? "bg-rose-600/10 text-rose-800 ring-1 ring-rose-700/20 hover:bg-rose-600/15"
-      : variant === "ghost"
-        ? "bg-transparent text-zinc-700 hover:bg-zinc-900/5 ring-1 ring-zinc-900/10"
-        : "bg-zinc-200/70 text-zinc-800 hover:bg-zinc-200/85 ring-1 ring-zinc-900/10 shadow-sm";
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(base, styles, className)}
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     >
-      {children}
-    </button>
+      <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .962L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z" />
+    </svg>
   );
 }
 
-function Segmented({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: Array<{ value: string; label: string }>;
-}) {
+function IconSearch({ className }: { className?: string }) {
   return (
-    <div className="inline-flex rounded-xl bg-zinc-900/5 ring-1 ring-zinc-900/10 p-1">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "px-3 py-1.5 text-xs font-medium rounded-lg transition",
-            value === o.value
-              ? "bg-zinc-200/80 text-zinc-900 shadow-sm ring-1 ring-zinc-900/10"
-              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50"
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
   );
 }
+
+function IconPaperclip({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+    </svg>
+  );
+}
+
+function IconSend({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m22 2-7 20-4-9-9-4Z" />
+      <path d="M22 2 11 13" />
+    </svg>
+  );
+}
+
+function IconCheckCheck({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 6 7 17l-5-5" />
+      <path d="m22 10-7.5 7.5L13 16" />
+    </svg>
+  );
+}
+
+// ─── UI Primitives ────────────────────────────────────────────────────────────
 
 function DateDivider({ label }: { label: string }) {
   return (
-    <div className="my-2 flex items-center gap-3">
-      <div className="h-px flex-1 bg-zinc-900/10" />
-      <div className="text-[11px] text-zinc-500">{label}</div>
-      <div className="h-px flex-1 bg-zinc-900/10" />
+    <div className="flex justify-center my-2">
+      <span className="text-[10px] text-zinc-400 bg-zinc-100 px-2 py-1 rounded-full uppercase tracking-wider font-bold font-geist">
+        {label}
+      </span>
     </div>
   );
 }
 
 function UnreadDivider() {
   return (
-    <div className="my-2 flex items-center gap-3">
-      <div className="h-px flex-1 bg-zinc-900/10" />
-      <div className="text-[11px] text-rose-700">Непрочитанные</div>
-      <div className="h-px flex-1 bg-zinc-900/10" />
+    <div className="flex justify-center my-2">
+      <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-1 rounded-full uppercase tracking-wider font-bold font-geist border border-rose-100">
+        Непрочитанные
+      </span>
     </div>
   );
 }
+
+// ─── ChatCard ─────────────────────────────────────────────────────────────────
 
 const ChatCard = React.memo(function ChatCard({
   chat,
@@ -276,238 +269,154 @@ const ChatCard = React.memo(function ChatCard({
   const snippet = chat.lastMessageText ?? "";
   const priceLabel = formatPrice(chat.price ?? null);
 
+  const statusLabel =
+    chat.status === "BOT" ? "ИИ" : chat.status === "MANAGER" ? "Менеджер" : "Неактив";
+  const statusClass =
+    chat.status === "BOT"
+      ? "bg-blue-50 text-blue-600 border border-blue-100"
+      : chat.status === "MANAGER"
+        ? "bg-orange-50 text-orange-600 border border-orange-100"
+        : "bg-zinc-100 text-zinc-500 border border-zinc-200";
+
   const handleSelect = useCallback(() => onSelect(chat.id), [onSelect, chat.id]);
-  const handleTogglePin = useCallback(() => onTogglePin?.(chat), [onTogglePin, chat]);
 
   return (
     <div
+      onClick={handleSelect}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") handleSelect();
+      }}
       className={cn(
-        "w-full rounded-2xl transition ring-1",
+        "p-3 bg-white rounded-2xl cursor-pointer transition outline-none",
         selected
-          ? "bg-zinc-200/80 ring-sky-700/25 shadow-sm"
-          : "bg-zinc-200/60 hover:bg-zinc-200/80 ring-zinc-900/10"
+          ? "border-2 border-green-400 shadow-sm"
+          : "border border-zinc-100 hover:border-zinc-300"
       )}
     >
-      <div className="flex items-start gap-2 p-2">
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={handleSelect}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") handleSelect();
-          }}
-          className="min-w-0 flex-1 outline-none"
+      <div className="flex justify-between items-start mb-1">
+        <span
+          className={cn(
+            "text-sm font-geist truncate mr-2",
+            selected ? "font-bold" : "font-medium text-zinc-700"
+          )}
         >
-          <div className="flex items-center gap-2">
-            <div className="truncate text-[13px] font-semibold text-zinc-900">
-              {title}
-            </div>
-
-            {/* ✅ цена */}
-            <span className="inline-flex items-center rounded-full bg-zinc-900/5 px-1.5 py-0.5 text-[11px] font-medium text-zinc-700 ring-1 ring-zinc-900/10">
-              {priceLabel}
+          {name}
+        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {chat.unreadCount > 0 && (
+            <span className="min-w-[18px] h-[18px] rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+              {chat.unreadCount}
             </span>
-
-            {chat.pinned && showPin && <Badge>PIN</Badge>}
-          </div>
-
-          <div className="mt-0.5 flex items-center justify-between gap-2">
-            <div className="truncate text-[11px] text-zinc-600">{name}</div>
-
-            <div className="shrink-0 flex items-center gap-2">
-              <div className="text-[11px] text-zinc-600">{time}</div>
-              {chat.unreadCount > 0 && (
-                <SmallDangerBadge>{chat.unreadCount} непроч.</SmallDangerBadge>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-1 line-clamp-1 text-[11px] text-zinc-700">
-            {snippet}
-          </div>
+          )}
+          <span className="text-[10px] text-zinc-400">{time}</span>
         </div>
+      </div>
 
+      <div className="text-xs text-zinc-500 mb-2 truncate">
+        {title} • {priceLabel}
+      </div>
+
+      {snippet && (
+        <div className="text-[11px] text-zinc-400 truncate mb-2">{snippet}</div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <span className={cn("px-2 py-0.5 rounded-md text-[10px] font-bold", statusClass)}>
+          {statusLabel}
+        </span>
         {showPin && (
-          <div className="shrink-0">
-            <Button
-              variant="ghost"
-              className="px-2 py-1 text-xs"
-              title={chat.pinned ? "Открепить" : "Закрепить"}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleTogglePin();
-              }}
-            >
-              {chat.pinned ? "📌" : "📍"}
-            </Button>
-          </div>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onTogglePin?.(chat);
+            }}
+            className="text-[13px] leading-none opacity-50 hover:opacity-100 transition"
+            title={chat.pinned ? "Открепить" : "Закрепить"}
+          >
+            {chat.pinned ? "📌" : "📍"}
+          </button>
         )}
       </div>
     </div>
   );
 });
+
+// ─── MessageBubble ────────────────────────────────────────────────────────────
 
 const MessageBubble = React.memo(function MessageBubble({
   m,
   chatStatus,
+  customerName,
 }: {
   m: MessageItem;
   chatStatus: ChatStatus;
+  customerName?: string | null;
 }) {
   const dir = m.direction ?? (m.author === "CUSTOMER" ? "IN" : "OUT");
   const isIn = dir === "IN";
-  const isBot = m.author === "BOT" || m.raw?.bot === true;
-
-  const label = isIn
-    ? "Клиент"
-    : isBot
-      ? "Бот"
-      : chatStatus === "BOT"
-        ? "Бот"
-        : "Менеджер";
-
-  const ts = getMsgIso(m);
+  const isBot =
+    m.author === "BOT" ||
+    m.raw?.bot === true ||
+    (dir === "OUT" && chatStatus === "BOT" && m.author !== "MANAGER");
   const isUnread = isIn && m.isRead === false;
 
-  return (
-    <div className={cn("flex", isIn ? "justify-start" : "justify-end")}>
-      <div
-        className={cn(
-          "max-w-[78%] rounded-2xl px-3 py-2 ring-1 shadow-sm",
-          isIn
-            ? "bg-zinc-200/75 text-zinc-900 ring-zinc-900/10"
-            : isBot
-              ? "bg-sky-600/10 text-sky-900 ring-sky-700/20"
-              : "bg-emerald-600/10 text-emerald-900 ring-emerald-700/20",
-          isUnread ? "ring-rose-600/30" : ""
-        )}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="text-[11px] font-semibold text-zinc-700">
-              {label}
-            </div>
-            {isUnread && (
-              <span className="inline-flex items-center rounded-full bg-rose-600/10 px-2 py-0.5 text-[10px] font-medium text-rose-800 ring-1 ring-rose-700/20">
-                непроч.
-              </span>
-            )}
-          </div>
+  const ts = getMsgIso(m);
+  const timeStr = new Date(ts).toLocaleString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
-          <div className="text-[11px] text-zinc-500">
-            {new Date(ts).toLocaleString("ru-RU", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </div>
-        </div>
-
+  if (isIn) {
+    return (
+      <div className="max-w-[70%]">
         <div
           className={cn(
-            "mt-1 whitespace-pre-wrap text-sm leading-relaxed",
-            isUnread ? "font-semibold" : ""
+            "bg-white border border-zinc-100 rounded-2xl rounded-tl-none p-3 shadow-sm",
+            isUnread && "border-rose-200"
           )}
         >
-          {m.text}
+          <p className={cn("text-sm text-zinc-800 font-geist", isUnread && "font-semibold")}>
+            {m.text}
+          </p>
         </div>
+        <span className="text-[10px] text-zinc-400 mt-1 ml-1 block">
+          {customerName ?? "Клиент"} • {timeStr}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-[70%] ml-auto text-right">
+      <div
+        className={cn(
+          "rounded-2xl rounded-tr-none p-3 shadow-md inline-block text-left",
+          isBot ? "bg-blue-600" : "bg-emerald-600"
+        )}
+      >
+        <p className="text-sm font-geist text-white">{m.text}</p>
+      </div>
+      <div className="flex items-center justify-end gap-1.5 mt-1">
+        <span
+          className={cn(
+            "text-[10px] font-bold uppercase",
+            isBot ? "text-blue-500" : "text-emerald-600"
+          )}
+        >
+          {isBot ? "ИИ AITOCRM" : "Менеджер"} • {timeStr}
+        </span>
+        <IconCheckCheck
+          className={cn("h-3 w-3 shrink-0", isBot ? "text-blue-500" : "text-emerald-600")}
+        />
       </div>
     </div>
   );
 });
 
-function ColumnHeader({
-  title,
-  subtitle,
-  sortOrder,
-  unreadOnly,
-  priceSort,
-  showUnreadFilter,
-  setSortOrder,
-  setUnreadOnly,
-  setPriceSort,
-}: {
-  title: string;
-  subtitle: string;
-  sortOrder: SortOrder;
-  unreadOnly: boolean;
-  priceSort: "" | "asc" | "desc";
-  showUnreadFilter?: boolean;
-  setSortOrder: (v: SortOrder) => void;
-  setUnreadOnly: (v: boolean) => void;
-  setPriceSort: (v: "" | "asc" | "desc") => void;
-}) {
-  return (
-    <div className="z-10 bg-zinc-200/70 backdrop-blur border-b border-zinc-900/10">
-      <div className="px-3 pt-3 pb-2">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="text-sm font-bold text-zinc-900">{title}</div>
-            <div className="text-xs text-zinc-500">{subtitle}</div>
-          </div>
-        </div>
-
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Segmented
-            value={sortOrder}
-            onChange={(v) => setSortOrder(v as SortOrder)}
-            options={[
-              { value: "desc", label: "Сначала новые" },
-              { value: "asc", label: "Сначала старые" },
-            ]}
-          />
-          {showUnreadFilter !== false && (
-            <Segmented
-              value={unreadOnly ? "unread" : "all"}
-              onChange={(v) => setUnreadOnly(v === "unread")}
-              options={[
-                { value: "all", label: "Все" },
-                { value: "unread", label: "Непроч." },
-              ]}
-            />
-          )}
-        </div>
-
-        {/* Сортировка по цене */}
-        <div className="mt-2 flex items-center gap-1.5">
-          <span className="text-[11px] text-zinc-500 shrink-0">Цена ₽:</span>
-          <div className="inline-flex rounded-xl bg-zinc-900/5 ring-1 ring-zinc-900/10 p-1 gap-0.5">
-            <button
-              onClick={() => setPriceSort(priceSort === "desc" ? "" : "desc")}
-              className={cn(
-                "px-2 py-1 text-xs font-medium rounded-lg transition",
-                priceSort === "desc"
-                  ? "bg-zinc-200/80 text-zinc-900 shadow-sm ring-1 ring-zinc-900/10"
-                  : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50"
-              )}
-            >
-              Сначала дороже
-            </button>
-            <button
-              onClick={() => setPriceSort(priceSort === "asc" ? "" : "asc")}
-              className={cn(
-                "px-2 py-1 text-xs font-medium rounded-lg transition",
-                priceSort === "asc"
-                  ? "bg-zinc-200/80 text-zinc-900 shadow-sm ring-1 ring-zinc-900/10"
-                  : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50"
-              )}
-            >
-              Сначала дешевле
-            </button>
-            {priceSort && (
-              <button
-                onClick={() => setPriceSort("")}
-                className="px-2 py-1 text-xs font-medium rounded-lg transition text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200/50"
-              >
-                Сбросить
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ─── Composer ─────────────────────────────────────────────────────────────────
 
 function Composer({
   onSend,
@@ -526,14 +435,22 @@ function Composer({
   }, [draft, sending, onSend]);
 
   return (
-    <div className="shrink-0 border-t border-zinc-900/10 bg-zinc-200/70 backdrop-blur px-5 py-4">
-      <div className="flex gap-2">
+    <div className="p-4 bg-white border-t border-zinc-100 shrink-0">
+      <div className="flex items-center gap-2 bg-zinc-50 rounded-2xl p-2 border border-zinc-200">
+        <button
+          className="p-2 text-zinc-400 hover:text-zinc-600 transition shrink-0"
+          title="Прикрепить файл"
+          type="button"
+        >
+          <IconPaperclip className="h-5 w-5" />
+        </button>
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          rows={2}
+          rows={1}
           placeholder="Написать сообщение..."
-          className="flex-1 resize-none rounded-2xl bg-zinc-100/90 ring-1 ring-zinc-900/10 px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-sky-500/25"
+          className="flex-1 bg-transparent border-none outline-none text-sm p-2 resize-none leading-5"
+          style={{ minHeight: "20px", maxHeight: "120px" }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -541,37 +458,50 @@ function Composer({
             }
           }}
         />
-        <Button onClick={handleSend} disabled={sending || !draft.trim()}>
-          Отправить
-        </Button>
-      </div>
-      <div className="mt-2 text-[11px] text-zinc-500">
-        В MOCK режиме отправка в Avito не идёт — сообщения сохраняются в БД, чтобы
-        тестировать UI/логику.
+        <button
+          onClick={handleSend}
+          disabled={sending || !draft.trim()}
+          type="button"
+          className="h-10 w-10 rounded-xl bg-green-400 text-zinc-950 flex items-center justify-center hover:brightness-95 transition disabled:opacity-50 shrink-0"
+          title="Отправить"
+        >
+          <IconSend className="h-5 w-5" />
+        </button>
       </div>
     </div>
   );
 }
+
+// ─── PageInner ────────────────────────────────────────────────────────────────
 
 function PageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const selectedChatId = sp.get("chat");
 
-  // refs for chat list scroll position (to avoid jumping to top on SWR updates)
-  const botListRef = useRef<HTMLDivElement | null>(null);
-  const manListRef = useRef<HTMLDivElement | null>(null);
-  const botListScrollTopRef = useRef(0);
-  const manListScrollTopRef = useRef(0);
+  // Sidebar list ref + per-tab scroll position
+  const sidebarListRef = useRef<HTMLDivElement | null>(null);
+  const tabScrollRef = useRef<Record<string, number>>({});
 
+  // Active tab
+  const [activeTab, setActiveTab] = useState<ChatStatus>("BOT");
+
+  // Search
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Filters per status
   const [filters, setFilters] = useState<
-    Record<ChatStatus, { sortOrder: SortOrder; unreadOnly: boolean; priceSort: "" | "asc" | "desc" }>
+    Record<
+      ChatStatus,
+      { sortOrder: SortOrder; unreadOnly: boolean; priceSort: "" | "asc" | "desc" }
+    >
   >({
     BOT: { sortOrder: "desc", unreadOnly: false, priceSort: "" },
     MANAGER: { sortOrder: "desc", unreadOnly: false, priceSort: "" },
     INACTIVE: { sortOrder: "desc", unreadOnly: false, priceSort: "" },
   });
 
+  // Build query strings
   const qsBOT = useMemo(() => {
     const f = filters.BOT;
     const u = new URLSearchParams();
@@ -621,14 +551,9 @@ function PageInner() {
 
   const [rtConnected, setRtConnected] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
   const refreshedChatsRef = useRef<Set<string>>(new Set());
-
-  // Cache selected chat snapshot so the chat doesn't close when it drops out of a filtered list (e.g. "Непроч.")
   const selectedChatCacheRef = useRef<Record<string, ChatItem>>({});
 
-  // ✅ Даже при подключённом SSE оставляем фоновый polling как подстраховку,
-  //    чтобы пропущенные события не вызывали бесконечную задержку
   const listRefresh = rtConnected ? 30_000 : 1500;
   const msgRefresh = rtConnected ? 15_000 : 1500;
 
@@ -663,8 +588,7 @@ function PageInner() {
     [inactiveData]
   );
 
-  // If "Непроч." filter is enabled and we opened a chat, keep showing it in the list
-  // even if it becomes read (otherwise UI closes the chat and list item disappears).
+  // Keep selected chat visible while "unread" filter is active
   const botChatsUI: ChatItem[] = useMemo(() => {
     const base = botChats;
     if (!filters.BOT.unreadOnly) return base;
@@ -696,7 +620,7 @@ function PageInner() {
     );
   }, [botChatsUI, manChatsUI, inactiveChats, selectedChatId]);
 
-  // Keep latest snapshot of selected chat to survive filtering/unmounting.
+  // Keep snapshot of selected chat
   useEffect(() => {
     if (!selectedChat) return;
     selectedChatCacheRef.current[selectedChat.id] = {
@@ -705,24 +629,50 @@ function PageInner() {
     };
   }, [selectedChat]);
 
-  // Restore chat list scrollTop after list updates (prevents scrollbar jumping to top).
-  const botListKey = useMemo(() => botChatsUI.map((c) => c.id).join("|"), [botChatsUI]);
-  const manListKey = useMemo(() => manChatsUI.map((c) => c.id).join("|"), [manChatsUI]);
+  // Auto-switch tab when selected chat's status differs
+  useEffect(() => {
+    if (!selectedChat) return;
+    if (selectedChat.status !== activeTab) {
+      setActiveTab(selectedChat.status);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChatId]);
 
+  // Tab switching with scroll preservation
+  const handleTabChange = useCallback(
+    (tab: ChatStatus) => {
+      const el = sidebarListRef.current;
+      if (el) {
+        tabScrollRef.current[activeTab] = el.scrollTop;
+      }
+      setActiveTab(tab);
+    },
+    [activeTab]
+  );
+
+  // Restore scroll position when tab changes
   useLayoutEffect(() => {
-    const el = botListRef.current;
+    const el = sidebarListRef.current;
     if (!el) return;
-    const t = botListScrollTopRef.current;
-    if (Math.abs(el.scrollTop - t) > 2) el.scrollTop = t;
-  }, [botListKey]);
+    const saved = tabScrollRef.current[activeTab] ?? 0;
+    el.scrollTop = saved;
+  }, [activeTab]);
 
-  useLayoutEffect(() => {
-    const el = manListRef.current;
-    if (!el) return;
-    const t = manListScrollTopRef.current;
-    if (Math.abs(el.scrollTop - t) > 2) el.scrollTop = t;
-  }, [manListKey]);
+  // Active chats for current tab, filtered by search
+  const rawActiveChats =
+    activeTab === "BOT" ? botChatsUI : activeTab === "MANAGER" ? manChatsUI : inactiveChats;
 
+  const activeChats = useMemo(() => {
+    if (!searchQuery.trim()) return rawActiveChats;
+    const q = searchQuery.toLowerCase();
+    return rawActiveChats.filter(
+      (c) =>
+        (c.customerName ?? "").toLowerCase().includes(q) ||
+        (c.itemTitle ?? "").toLowerCase().includes(q)
+    );
+  }, [rawActiveChats, searchQuery]);
+
+  // Messages
   const { data: msgData, mutate: mutateMsgs } = useSWR<any>(
     selectedChatId ? `/api/chats/${selectedChatId}/messages` : null,
     fetcher,
@@ -741,7 +691,7 @@ function PageInner() {
     return msgItems.findIndex((m) => m.direction === "IN" && m.isRead === false);
   }, [msgItems]);
 
-  // ===== Scroll management =====
+  // Scroll management
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const isAtBottomRef = useRef(true);
   const [showJump, setShowJump] = useState(false);
@@ -789,12 +739,10 @@ function PageInner() {
     }
   }, [selectedChatId, msgItems]);
 
-  // ===== Audio notification for incoming messages =====
+  // Audio notification
   const notifAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    // Создаём аудио-элемент из инлайн data-URI (короткий "ding")
-    // Используем Web Audio API fallback если data-URI не поддерживается
     try {
       const ctx = new AudioContext();
       notifAudioRef.current = {
@@ -817,7 +765,7 @@ function PageInner() {
     } catch {}
   }, []);
 
-  // ===== SSE (global) =====
+  // SSE – global (chat list updates)
   useEffect(() => {
     const es = new EventSource("/api/events");
 
@@ -832,9 +780,7 @@ function PageInner() {
       }, 120);
     };
 
-    /** Мгновенное обновление SWR-кэша списка чатов из chatSnapshot */
     const applyChatSnapshot = (snapshot: ChatItem) => {
-      // Keep a local copy so selected chat can stay open even if filtered out.
       selectedChatCacheRef.current[snapshot.id] = {
         ...selectedChatCacheRef.current[snapshot.id],
         ...snapshot,
@@ -856,15 +802,13 @@ function PageInner() {
             next = [...items];
             next[idx] = { ...next[idx], ...snapshot };
           } else {
-            // Новый чат — добавляем в начало
             next = [snapshot, ...items];
           }
           return { ...cur, items: next };
         },
-        { revalidate: false },
+        { revalidate: false }
       );
 
-      // Убираем из других списков (если статус сменился)
       for (const otherMutator of otherMutators) {
         otherMutator(
           (cur: any) => {
@@ -872,12 +816,11 @@ function PageInner() {
             const items: ChatItem[] = (cur.items ?? []) as ChatItem[];
             const idx = items.findIndex((c) => c.id === snapshot.id);
             if (idx >= 0) {
-              const next = items.filter((c) => c.id !== snapshot.id);
-              return { ...cur, items: next };
+              return { ...cur, items: items.filter((c) => c.id !== snapshot.id) };
             }
             return cur;
           },
-          { revalidate: false },
+          { revalidate: false }
         );
       }
     };
@@ -892,17 +835,14 @@ function PageInner() {
       if (!data) return;
       if (data.type === "ping" || data.type === "hello") return;
 
-      // Если есть chatSnapshot — мгновенно обновляем кэш без SWR refetch
       if (data.chatSnapshot) {
         applyChatSnapshot(data.chatSnapshot);
       } else {
-        // fallback — полный рефетч
         pending.lists = true;
         scheduleFlush();
       }
     };
 
-    // Обработчик new_incoming — звуковое уведомление
     const onNewIncoming = (ev: MessageEvent) => {
       let data: RealtimeEvent | null = null;
       try {
@@ -912,10 +852,8 @@ function PageInner() {
       }
       if (!data || data.type !== "new_incoming") return;
 
-      // Звуковой сигнал
       notifAudioRef.current?.play?.()?.catch?.(() => {});
 
-      // Если есть chatSnapshot — обновляем список
       if (data.chatSnapshot) {
         applyChatSnapshot(data.chatSnapshot);
       }
@@ -931,11 +869,11 @@ function PageInner() {
     return () => {
       try {
         es.close();
-      } catch { }
+      } catch {}
     };
   }, [mutateBOT, mutateMAN, mutateINACTIVE]);
 
-  // ===== SSE (chat scoped): message_created -> update SWR cache =====
+  // SSE – chat-scoped (message_created)
   useEffect(() => {
     if (!selectedChatId) return;
 
@@ -986,14 +924,14 @@ function PageInner() {
     return () => {
       try {
         es.removeEventListener("message_created", onMessageCreated as any);
-      } catch { }
+      } catch {}
       try {
         es.close();
-      } catch { }
+      } catch {}
     };
   }, [selectedChatId, mutateMsgs]);
 
-  // ===== Refresh history (Avito) once if server suggests =====
+  // Refresh history once if server suggests
   useEffect(() => {
     if (!selectedChatId) return;
     if (!msgData?.needsRefresh) return;
@@ -1038,8 +976,6 @@ function PageInner() {
 
     await apiFetch(`/api/chats/${chatId}/read`, { method: "POST" }).catch(() => null);
 
-    // Prevent "unread" filter from closing the currently opened chat
-    // and avoid re-triggering markRead on cached snapshot.
     selectedChatCacheRef.current[chatId] = {
       ...selectedChatCacheRef.current[chatId],
       unreadCount: 0,
@@ -1070,7 +1006,7 @@ function PageInner() {
 
   const [sending, setSending] = useState(false);
 
-  // ===== Webhook subscription status =====
+  // Webhook subscription
   const { data: webhookData, mutate: mutateWebhook } = useSWR<any>(
     "/api/avito/subscribe",
     fetcher,
@@ -1103,117 +1039,164 @@ function PageInner() {
     }
   }
 
-  const selectChat = useCallback(async (id: string) => {
-    const u = new URL(window.location.href);
-    u.searchParams.set("chat", id);
-    router.replace(u.pathname + "?" + u.searchParams.toString());
-  }, [router]);
+  const selectChat = useCallback(
+    async (id: string) => {
+      const u = new URL(window.location.href);
+      u.searchParams.set("chat", id);
+      router.replace(u.pathname + "?" + u.searchParams.toString());
+    },
+    [router]
+  );
 
-  const togglePin = useCallback(async (chat: ChatItem) => {
-    await apiFetch(`/api/chats/${chat.id}/pin`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pinned: !chat.pinned }),
-    });
-    await Promise.all([mutateBOT(), mutateMAN()]);
-  }, [mutateBOT, mutateMAN]);
-
-  const finishDialog = useCallback(async (chat: ChatItem) => {
-    await apiFetch(`/api/chats/${chat.id}/finish`, { method: "POST" });
-    await Promise.all([mutateBOT(), mutateMAN()]);
-  }, [mutateBOT, mutateMAN]);
-
-  const reactivateChat = useCallback(async (chat: ChatItem) => {
-    await apiFetch(`/api/chats/${chat.id}/reactivate`, { method: "POST" });
-    await Promise.all([mutateBOT(), mutateMAN(), mutateINACTIVE()]);
-  }, [mutateBOT, mutateMAN, mutateINACTIVE]);
-
-  const sendMessage = useCallback(async (text: string) => {
-    if (!selectedChatId) return;
-    if (!text) return;
-
-    setSending(true);
-    try {
-      const resp = await apiFetch(`/api/chats/${selectedChatId}/send`, {
+  const togglePin = useCallback(
+    async (chat: ChatItem) => {
+      await apiFetch(`/api/chats/${chat.id}/pin`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, markRead: true }),
+        body: JSON.stringify({ pinned: !chat.pinned }),
       });
-
-      const json = await resp.json().catch(() => null);
-
-      if (json?.message) {
-        const m = json.message as MessageItem;
-        await mutateMsgs(
-          (cur: any) => {
-            const current = cur ?? { ok: true, refreshed: false, messages: [] };
-            const arr: MessageItem[] = Array.isArray(current.messages)
-              ? current.messages
-              : Array.isArray(current.items)
-                ? current.items
-                : [];
-
-            if (arr.some((x) => x.id === m.id)) return current;
-
-            const next = [...arr, m].sort((a, b) => toMs(a) - toMs(b));
-            if (Array.isArray(current.items)) return { ...current, items: next };
-            return { ...current, messages: next };
-          },
-          { revalidate: false }
-        );
-
-        requestAnimationFrame(() => scrollToBottom("smooth"));
-      }
-
       await Promise.all([mutateBOT(), mutateMAN()]);
-    } finally {
-      setSending(false);
-    }
-  }, [selectedChatId, mutateMsgs, mutateBOT, mutateMAN]);
+    },
+    [mutateBOT, mutateMAN]
+  );
+
+  const finishDialog = useCallback(
+    async (chat: ChatItem) => {
+      await apiFetch(`/api/chats/${chat.id}/finish`, { method: "POST" });
+      await Promise.all([mutateBOT(), mutateMAN()]);
+    },
+    [mutateBOT, mutateMAN]
+  );
+
+  const reactivateChat = useCallback(
+    async (chat: ChatItem) => {
+      await apiFetch(`/api/chats/${chat.id}/reactivate`, { method: "POST" });
+      await Promise.all([mutateBOT(), mutateMAN(), mutateINACTIVE()]);
+    },
+    [mutateBOT, mutateMAN, mutateINACTIVE]
+  );
+
+  const sendMessage = useCallback(
+    async (text: string) => {
+      if (!selectedChatId) return;
+      if (!text) return;
+
+      setSending(true);
+      try {
+        const resp = await apiFetch(`/api/chats/${selectedChatId}/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, markRead: true }),
+        });
+
+        const json = await resp.json().catch(() => null);
+
+        if (json?.message) {
+          const m = json.message as MessageItem;
+          await mutateMsgs(
+            (cur: any) => {
+              const current = cur ?? { ok: true, refreshed: false, messages: [] };
+              const arr: MessageItem[] = Array.isArray(current.messages)
+                ? current.messages
+                : Array.isArray(current.items)
+                  ? current.items
+                  : [];
+
+              if (arr.some((x) => x.id === m.id)) return current;
+
+              const next = [...arr, m].sort((a, b) => toMs(a) - toMs(b));
+              if (Array.isArray(current.items)) return { ...current, items: next };
+              return { ...current, messages: next };
+            },
+            { revalidate: false }
+          );
+
+          requestAnimationFrame(() => scrollToBottom("smooth"));
+        }
+
+        await Promise.all([mutateBOT(), mutateMAN()]);
+      } finally {
+        setSending(false);
+      }
+    },
+    [selectedChatId, mutateMsgs, mutateBOT, mutateMAN]
+  );
+
+  // Total unread counts per tab (for badge display)
+  const botUnread = useMemo(() => botChatsUI.reduce((s, c) => s + (c.unreadCount ?? 0), 0), [botChatsUI]);
+  const manUnread = useMemo(() => manChatsUI.reduce((s, c) => s + (c.unreadCount ?? 0), 0), [manChatsUI]);
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex flex-col lg:h-[100dvh] lg:overflow-hidden">
-      {/* Top bar */}
-      <div className="shrink-0 border-b border-zinc-900/10 bg-zinc-200/70 backdrop-blur">
-        <div className="mx-auto max-w-[1600px] px-4 py-3 flex items-center justify-between">
-          <div>
-            <div className="text-base font-bold text-zinc-900">Avito CRM</div>
-            <div className="text-xs text-zinc-500">
-              Мгновенные сообщения + AI-ответы
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge>{rtConnected ? "RT" : "RT off"}</Badge>
-            {IS_MOCK ? <Badge>MOCK</Badge> : null}
+    <div
+      className="h-screen p-5 bg-cover bg-center"
+      style={{
+        backgroundImage:
+          "url('https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/8e249747-11d9-4c29-9017-590f07779c2e_3840w.jpg')",
+        backgroundColor: "#e4e4e7",
+      }}
+    >
+      <div className="h-full overflow-hidden shadow-2xl max-w-7xl bg-white rounded-[30px] mx-auto flex flex-col">
 
+        {/* ── Header ── */}
+        <header className="border-b border-zinc-100 px-6 py-4 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 flex bg-green-400 rounded-full items-center justify-center shrink-0">
+              <IconSparkles className="h-4 w-4 text-zinc-900" />
+            </div>
+            <span className="text-lg tracking-tight font-medium font-geist">AITOCRM</span>
+
+            {/* RT status dot */}
+            <span
+              className={cn(
+                "text-[10px] px-2 py-0.5 rounded-full font-medium font-geist",
+                rtConnected
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-zinc-100 text-zinc-500"
+              )}
+            >
+              {rtConnected ? "● RT" : "○ RT"}
+            </span>
+
+            {IS_MOCK && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium font-geist">
+                MOCK
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
             {/* AI status */}
             {webhookDiag && (
-              <span className={cn(
-                "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1",
-                webhookDiag.aiConfigured
-                  ? "bg-emerald-600/10 text-emerald-800 ring-emerald-700/20"
-                  : "bg-rose-600/10 text-rose-800 ring-rose-700/20"
-              )}>
+              <span
+                className={cn(
+                  "text-[10px] px-2 py-0.5 rounded-full font-medium font-geist",
+                  webhookDiag.aiConfigured
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-rose-100 text-rose-700"
+                )}
+              >
                 {webhookDiag.aiConfigured ? "AI ON" : "AI OFF"}
               </span>
             )}
 
-            {/* Webhook status */}
+            {/* Webhook toggle */}
             {!IS_MOCK && (
               <button
                 onClick={toggleWebhookSubscription}
                 disabled={webhookLoading}
                 className={cn(
-                  "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 transition",
+                  "text-[10px] px-2 py-0.5 rounded-full font-medium transition font-geist",
                   webhookSubscribed
-                    ? "bg-emerald-600/10 text-emerald-800 ring-emerald-700/20"
-                    : "bg-amber-600/10 text-amber-800 ring-amber-700/20",
-                  webhookLoading ? "opacity-50 pointer-events-none" : "hover:opacity-80 cursor-pointer"
+                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                    : "bg-amber-100 text-amber-700 hover:bg-amber-200",
+                  webhookLoading && "opacity-50 pointer-events-none"
                 )}
                 title={
                   webhookSubscribed
-                    ? "Вебхук Avito активен. Нажмите чтобы отключить."
-                    : "Вебхук Avito не подключён. Нажмите чтобы подключить мгновенную доставку сообщений."
+                    ? "Вебхук активен. Нажмите чтобы отключить."
+                    : "Вебхук не подключён. Нажмите чтобы подключить."
                 }
               >
                 {webhookSubscribed ? "Webhook ON" : "Webhook OFF"}
@@ -1224,8 +1207,7 @@ function PageInner() {
             {webhookDiag && !webhookDiag.healthy && (
               <button
                 onClick={() => setShowDiag((v) => !v)}
-                className="inline-flex items-center rounded-full bg-rose-600/10 px-2 py-0.5 text-xs font-medium text-rose-800 ring-1 ring-rose-700/20 hover:opacity-80 cursor-pointer transition"
-                title="Есть проблемы с конфигурацией"
+                className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium hover:bg-rose-200 transition font-geist"
               >
                 {webhookDiag.issues?.length ?? 0} проблем
               </button>
@@ -1233,274 +1215,306 @@ function PageInner() {
 
             <a
               href="/dashboard"
-              className="inline-flex items-center rounded-xl bg-zinc-200/70 px-3 py-1.5 text-xs font-medium text-zinc-700 ring-1 ring-zinc-900/10 shadow-sm hover:bg-zinc-200/85 transition"
+              className="px-3 py-1.5 text-xs font-medium rounded-full bg-zinc-100 hover:bg-zinc-200 transition font-geist"
             >
               Кабинет
             </a>
             <a
               href="/ai-assistant"
-              className="inline-flex items-center rounded-xl bg-zinc-200/70 px-3 py-1.5 text-xs font-medium text-zinc-700 ring-1 ring-zinc-900/10 shadow-sm hover:bg-zinc-200/85 transition"
+              className="px-3 py-1.5 text-xs font-medium rounded-full bg-zinc-950 text-white hover:bg-zinc-800 transition font-geist"
             >
               AI Ассистент
             </a>
           </div>
-        </div>
+        </header>
 
-        {/* Diagnostics panel */}
-        {showDiag && webhookDiag?.issues?.length > 0 && (
-          <div className="mx-auto max-w-[1600px] px-4 pb-3">
-            <div className="rounded-2xl bg-rose-50 ring-1 ring-rose-200 p-3 space-y-1">
-              <div className="text-xs font-semibold text-rose-900">Диагностика конфигурации:</div>
-              {webhookDiag.issues.map((issue: string, i: number) => (
-                <div key={i} className="text-xs text-rose-800">• {issue}</div>
-              ))}
-            </div>
+        {/* ── Diagnostics / error banners ── */}
+        {(showDiag && (webhookDiag?.issues?.length ?? 0) > 0) || webhookError ? (
+          <div className="px-6 pb-3 shrink-0 space-y-2">
+            {showDiag && (webhookDiag?.issues?.length ?? 0) > 0 && (
+              <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 space-y-1">
+                <div className="text-xs font-semibold text-rose-900">Диагностика конфигурации:</div>
+                {webhookDiag.issues.map((issue: string, i: number) => (
+                  <div key={i} className="text-xs text-rose-800">
+                    • {issue}
+                  </div>
+                ))}
+              </div>
+            )}
+            {webhookError && (
+              <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3 flex items-center justify-between">
+                <div className="text-xs text-amber-900">{webhookError}</div>
+                <button
+                  onClick={() => setWebhookError(null)}
+                  className="text-xs text-amber-700 hover:text-amber-900 ml-2"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
-        )}
+        ) : null}
 
-        {/* Webhook error */}
-        {webhookError && (
-          <div className="mx-auto max-w-[1600px] px-4 pb-3">
-            <div className="rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-3 flex items-center justify-between">
-              <div className="text-xs text-amber-900">{webhookError}</div>
-              <button onClick={() => setWebhookError(null)} className="text-xs text-amber-700 hover:text-amber-900 ml-2">x</button>
+        {/* ── Body ── */}
+        <div className="flex-1 flex overflow-hidden p-2 gap-2 min-h-0">
+
+          {/* ── Left sidebar: chat list ── */}
+          <aside className="w-80 shrink-0 flex flex-col gap-3 bg-zinc-50 rounded-[24px] border border-zinc-200/50 p-4">
+
+            {/* Tab switcher */}
+            <div className="flex items-center gap-1 p-1 bg-zinc-100 rounded-2xl shrink-0">
+              {(["BOT", "MANAGER", "INACTIVE"] as ChatStatus[]).map((tab) => {
+                const label =
+                  tab === "BOT"
+                    ? "ИИ отвечает"
+                    : tab === "MANAGER"
+                      ? "Менеджер"
+                      : "Неактивные";
+                const unread = tab === "BOT" ? botUnread : tab === "MANAGER" ? manUnread : 0;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => handleTabChange(tab)}
+                    className={cn(
+                      "flex-1 py-2 text-xs rounded-xl transition font-geist relative",
+                      activeTab === tab
+                        ? "bg-white shadow-sm font-semibold"
+                        : "font-medium text-zinc-500 hover:text-zinc-700"
+                    )}
+                  >
+                    {label}
+                    {unread > 0 && (
+                      <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold px-1">
+                        {unread}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          </div>
-        )}
-      </div>
 
-      {/* Main area */}
-      <div className="mx-auto max-w-[1800px] w-full px-4 py-4 flex-1 lg:min-h-0">
-        <div className="grid gap-4 lg:grid-cols-[320px_320px_320px_1fr] lg:h-full lg:min-h-0">
-          {/* INACTIVE column */}
-          <section className="rounded-3xl bg-amber-50/70 ring-1 ring-amber-900/15 overflow-hidden lg:flex lg:flex-col lg:min-h-0">
-            <ColumnHeader
-              title="Неактивные сделки"
-              subtitle="нет ответа после дожима бота"
-              sortOrder={filters.INACTIVE.sortOrder}
-              unreadOnly={filters.INACTIVE.unreadOnly}
-              priceSort={filters.INACTIVE.priceSort}
-              showUnreadFilter={false}
-              setSortOrder={(v) =>
-                setFilters((p) => ({
-                  ...p,
-                  INACTIVE: { ...p.INACTIVE, sortOrder: v },
-                }))
-              }
-              setUnreadOnly={(v) =>
-                setFilters((p) => ({
-                  ...p,
-                  INACTIVE: { ...p.INACTIVE, unreadOnly: v },
-                }))
-              }
-              setPriceSort={(v) =>
-                setFilters((p) => ({ ...p, INACTIVE: { ...p.INACTIVE, priceSort: v } }))
-              }
-            />
+            {/* Search */}
+            <div className="relative shrink-0">
+              <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Поиск сделки..."
+                className="w-full pl-9 pr-4 py-2 bg-white border border-zinc-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-zinc-200 font-geist"
+              />
+            </div>
 
-            <div className="p-2 space-y-1.5 lg:flex-1 lg:min-h-0 overflow-auto">
-              {inactiveChats.length === 0 ? (
-                <div className="rounded-2xl bg-amber-50/70 ring-1 ring-amber-900/10 p-4 text-sm text-zinc-600">
-                  Неактивных сделок нет
+            {/* Sort controls */}
+            <div className="flex items-center gap-1 flex-wrap shrink-0">
+              <button
+                onClick={() =>
+                  setFilters((p) => ({
+                    ...p,
+                    [activeTab]: {
+                      ...p[activeTab],
+                      sortOrder: p[activeTab].sortOrder === "desc" ? "asc" : "desc",
+                      priceSort: "",
+                    },
+                  }))
+                }
+                className="text-[10px] px-2 py-1 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition font-geist"
+              >
+                {filters[activeTab].sortOrder === "desc" ? "↓ Новые" : "↑ Старые"}
+              </button>
+              <button
+                onClick={() =>
+                  setFilters((p) => ({
+                    ...p,
+                    [activeTab]: {
+                      ...p[activeTab],
+                      priceSort: p[activeTab].priceSort === "desc" ? "" : "desc",
+                    },
+                  }))
+                }
+                className={cn(
+                  "text-[10px] px-2 py-1 rounded-lg transition font-geist",
+                  filters[activeTab].priceSort === "desc"
+                    ? "bg-zinc-800 text-white"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                )}
+              >
+                ₽↓ Дороже
+              </button>
+              <button
+                onClick={() =>
+                  setFilters((p) => ({
+                    ...p,
+                    [activeTab]: {
+                      ...p[activeTab],
+                      priceSort: p[activeTab].priceSort === "asc" ? "" : "asc",
+                    },
+                  }))
+                }
+                className={cn(
+                  "text-[10px] px-2 py-1 rounded-lg transition font-geist",
+                  filters[activeTab].priceSort === "asc"
+                    ? "bg-zinc-800 text-white"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                )}
+              >
+                ₽↑ Дешевле
+              </button>
+              {activeTab !== "INACTIVE" && (
+                <button
+                  onClick={() =>
+                    setFilters((p) => ({
+                      ...p,
+                      [activeTab]: {
+                        ...p[activeTab],
+                        unreadOnly: !p[activeTab].unreadOnly,
+                      },
+                    }))
+                  }
+                  className={cn(
+                    "text-[10px] px-2 py-1 rounded-lg transition font-geist",
+                    filters[activeTab].unreadOnly
+                      ? "bg-rose-500 text-white"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  )}
+                >
+                  Непрочит.
+                </button>
+              )}
+            </div>
+
+            {/* Chat cards list */}
+            <div
+              ref={sidebarListRef}
+              className="flex-1 overflow-y-auto space-y-2 min-h-0 pr-0.5"
+            >
+              {activeChats.length === 0 ? (
+                <div className="text-sm text-zinc-400 text-center py-10 font-geist">
+                  {searchQuery ? "Ничего не найдено" : "Пусто"}
                 </div>
               ) : (
-                inactiveChats.map((c) => (
-                  <div key={c.id} className="relative group">
+                activeChats.map((chat) => (
+                  <div key={chat.id} className="relative group">
                     <ChatCard
-                      chat={c}
-                      selected={c.id === selectedChatId}
+                      chat={chat}
+                      selected={chat.id === selectedChatId}
                       onSelect={selectChat}
-                      showPin={false}
+                      onTogglePin={activeTab === "MANAGER" ? togglePin : undefined}
+                      showPin={activeTab === "MANAGER"}
                     />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        reactivateChat(c);
-                      }}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition inline-flex items-center rounded-lg bg-emerald-600/10 px-2 py-0.5 text-[11px] font-medium text-emerald-800 ring-1 ring-emerald-700/20 hover:bg-emerald-600/20"
-                      title="Вернуть в работу (BOT)"
-                    >
-                      Реактивировать
-                    </button>
+                    {activeTab === "INACTIVE" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          reactivateChat(chat);
+                        }}
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition text-[10px] px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 font-geist"
+                      >
+                        Реактивировать
+                      </button>
+                    )}
                   </div>
                 ))
               )}
             </div>
-          </section>
+          </aside>
 
-          {/* BOT column */}
-          <section className="rounded-3xl bg-zinc-200/70 ring-1 ring-zinc-900/10 overflow-hidden lg:flex lg:flex-col lg:min-h-0">
-            <ColumnHeader
-              title="Обработка ботом"
-              subtitle="чаты, где отвечает бот"
-              sortOrder={filters.BOT.sortOrder}
-              unreadOnly={filters.BOT.unreadOnly}
-              priceSort={filters.BOT.priceSort}
-              setSortOrder={(v) =>
-                setFilters((p) => ({ ...p, BOT: { ...p.BOT, sortOrder: v } }))
-              }
-              setUnreadOnly={(v) =>
-                setFilters((p) => ({ ...p, BOT: { ...p.BOT, unreadOnly: v } }))
-              }
-              setPriceSort={(v) =>
-                setFilters((p) => ({ ...p, BOT: { ...p.BOT, priceSort: v } }))
-              }
-            />
-
-            <div
-              ref={botListRef}
-              onScroll={(e) => {
-                botListScrollTopRef.current = e.currentTarget.scrollTop;
-              }}
-              className="p-2 space-y-1.5 lg:flex-1 lg:min-h-0 overflow-auto"
-            >
-              {botChatsUI.length === 0 ? (
-                <div className="rounded-2xl bg-zinc-200/70 ring-1 ring-zinc-900/10 p-4 text-sm text-zinc-600">
-                  Тут пока пусто
-                </div>
-              ) : (
-                botChatsUI.map((c) => (
-                  <ChatCard
-                    key={c.id}
-                    chat={c}
-                    selected={c.id === selectedChatId}
-                    onSelect={selectChat}
-                    showPin={false}
-                  />
-                ))
-              )}
-            </div>
-          </section>
-
-          {/* MANAGER column */}
-          <section className="rounded-3xl bg-zinc-200/70 ring-1 ring-zinc-900/10 overflow-hidden lg:flex lg:flex-col lg:min-h-0">
-            <ColumnHeader
-              title="Переведен на менеджера"
-              subtitle="чаты для оператора + закрепы"
-              sortOrder={filters.MANAGER.sortOrder}
-              unreadOnly={filters.MANAGER.unreadOnly}
-              priceSort={filters.MANAGER.priceSort}
-              setSortOrder={(v) =>
-                setFilters((p) => ({
-                  ...p,
-                  MANAGER: { ...p.MANAGER, sortOrder: v },
-                }))
-              }
-              setUnreadOnly={(v) =>
-                setFilters((p) => ({
-                  ...p,
-                  MANAGER: { ...p.MANAGER, unreadOnly: v },
-                }))
-              }
-              setPriceSort={(v) =>
-                setFilters((p) => ({ ...p, MANAGER: { ...p.MANAGER, priceSort: v } }))
-              }
-            />
-
-            <div
-              ref={manListRef}
-              onScroll={(e) => {
-                manListScrollTopRef.current = e.currentTarget.scrollTop;
-              }}
-              className="p-2 space-y-1.5 lg:flex-1 lg:min-h-0 overflow-auto"
-            >
-              {manChatsUI.length === 0 ? (
-                <div className="rounded-2xl bg-zinc-200/70 ring-1 ring-zinc-900/10 p-4 text-sm text-zinc-600">
-                  Тут пока пусто
-                </div>
-              ) : (
-                manChatsUI.map((c) => (
-                  <ChatCard
-                    key={c.id}
-                    chat={c}
-                    selected={c.id === selectedChatId}
-                    onSelect={selectChat}
-                    onTogglePin={togglePin}
-                    showPin={true}
-                  />
-                ))
-              )}
-            </div>
-          </section>
-
-          {/* Chat panel */}
-          <section className="rounded-3xl bg-zinc-200/70 ring-1 ring-zinc-900/10 overflow-hidden lg:flex lg:flex-col lg:min-h-0 min-h-[520px]">
+          {/* ── Right: Chat window ── */}
+          <main className="flex-1 flex flex-col bg-zinc-50 rounded-[24px] border border-zinc-200/50 overflow-hidden min-h-0 min-w-0">
             {!selectedChat ? (
-              <div className="p-6 flex-1 lg:min-h-0 flex items-center justify-center">
-                <div className="max-w-md rounded-3xl bg-zinc-100/85 ring-1 ring-zinc-900/10 p-6 shadow-sm">
-                  <div className="text-lg font-bold text-zinc-900">Выбери чат</div>
-                  <div className="mt-2 text-sm text-zinc-600">
-                    Слева две колонки. Нажми на чат — справа откроется переписка.
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center px-8">
+                  <div className="h-16 w-16 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <IconSparkles className="h-7 w-7 text-zinc-400" />
+                  </div>
+                  <div className="text-base font-bold text-zinc-900 font-geist">
+                    Выберите чат
+                  </div>
+                  <div className="mt-2 text-sm text-zinc-500 font-geist">
+                    Нажмите на чат слева, чтобы открыть переписку
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col flex-1 lg:min-h-0">
+              <div className="flex flex-col h-full min-h-0">
+
                 {/* Chat header */}
-                <div className="shrink-0 border-b border-zinc-900/10 bg-zinc-200/70 backdrop-blur px-5 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="px-6 py-4 bg-white border-b border-zinc-100 flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3 min-w-0 mr-4">
+                    <div className="h-10 w-10 rounded-full bg-zinc-100 flex items-center justify-center font-bold text-zinc-500 text-sm shrink-0">
+                      {(selectedChat.customerName ?? "?").charAt(0).toUpperCase()}
+                    </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="truncate text-base font-bold text-zinc-900">
-                          {selectedChat.itemTitle ?? "Без названия"}
-                        </div>
-                        <Badge>{selectedChat.status}</Badge>
-                        {selectedChat.unreadCount > 0 && (
-                          <DangerBadge>{selectedChat.unreadCount} непроч.</DangerBadge>
-                        )}
-                      </div>
-
-                      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
-                        <div>
-                          Клиент:{" "}
-                          <span className="text-zinc-800">
-                            {selectedChat.customerName ?? "—"}
-                          </span>
-                        </div>
-
-                        {/* ✅ цена */}
-                        <div>
-                          Цена:{" "}
-                          <span className="text-zinc-800">
-                            {formatPrice(selectedChat.price ?? null)}
-                          </span>
-                        </div>
-
+                      <h2 className="text-sm font-bold font-geist truncate">
+                        {selectedChat.customerName ?? "Клиент"}
+                      </h2>
+                      <p className="text-[11px] text-zinc-500 truncate">
+                        {selectedChat.itemTitle ?? "Без названия"}{" "}
+                        • {formatPrice(selectedChat.price)}
                         {selectedChat.adUrl && (
-                          <a
-                            className="text-sky-700 hover:text-sky-800"
-                            href={selectedChat.adUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            объявление
-                          </a>
+                          <>
+                            {" • "}
+                            <a
+                              href={selectedChat.adUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-sky-600 hover:text-sky-700"
+                            >
+                              объявление
+                            </a>
+                          </>
                         )}
                         {selectedChat.chatUrl && (
-                          <a
-                            className="text-sky-700 hover:text-sky-800"
-                            href={selectedChat.chatUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            чат
-                          </a>
+                          <>
+                            {" • "}
+                            <a
+                              href={selectedChat.chatUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-sky-600 hover:text-sky-700"
+                            >
+                              чат Avito
+                            </a>
+                          </>
                         )}
-                      </div>
+                      </p>
                     </div>
+                  </div>
 
-                    <div className="flex items-center gap-2">
-                      {selectedChat.status === "MANAGER" && (
-                        <Button variant="danger" onClick={() => finishDialog(selectedChat)}>
-                          Завершить диалог → BOT
-                        </Button>
-                      )}
-                      {selectedChat.status === "INACTIVE" && (
-                        <Button onClick={() => reactivateChat(selectedChat)}>
-                          Реактивировать → BOT
-                        </Button>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                    {selectedChat.unreadCount > 0 && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold font-geist">
+                        {selectedChat.unreadCount} непроч.
+                      </span>
+                    )}
+
+                    {selectedChat.status === "MANAGER" && (
+                      <button
+                        onClick={() => finishDialog(selectedChat)}
+                        className="px-3 py-1.5 text-[11px] font-medium rounded-lg border border-zinc-200 hover:bg-zinc-50 font-geist transition"
+                      >
+                        Завершить диалог
+                      </button>
+                    )}
+
+                    {selectedChat.status === "INACTIVE" && (
+                      <button
+                        onClick={() => reactivateChat(selectedChat)}
+                        className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 font-geist transition"
+                      >
+                        Реактивировать
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        const u = new URL(window.location.href);
+                        u.searchParams.delete("chat");
+                        router.replace(u.pathname + (u.search || ""));
+                      }}
+                      className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 font-geist transition"
+                    >
+                      Закрыть
+                    </button>
                   </div>
                 </div>
 
@@ -1508,14 +1522,21 @@ function PageInner() {
                 <div
                   ref={messagesRef}
                   onScroll={handleScroll}
-                  className="relative flex-1 min-h-0 overflow-auto px-5 py-4 space-y-3 bg-gradient-to-b from-zinc-200/60 to-zinc-200/35"
+                  className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0"
                 >
                   {refreshing && (
-                    <div className="sticky top-0 z-10 -mx-5 px-5 pb-2">
-                      <div className="rounded-2xl bg-zinc-100/85 ring-1 ring-zinc-900/10 px-3 py-2 text-xs text-zinc-700 flex items-center justify-between shadow-sm">
-                        <span>Подгружаю историю из Avito…</span>
-                        <span className="text-zinc-500">refresh=1</span>
-                      </div>
+                    <div className="flex justify-center mb-2">
+                      <span className="text-[10px] text-zinc-400 bg-zinc-100 px-3 py-1 rounded-full font-geist">
+                        Загружаю историю из Avito…
+                      </span>
+                    </div>
+                  )}
+
+                  {msgItems.length === 0 && !refreshing && (
+                    <div className="flex justify-center pt-8">
+                      <span className="text-sm text-zinc-400 font-geist">
+                        Сообщений пока нет
+                      </span>
                     </div>
                   )}
 
@@ -1529,24 +1550,26 @@ function PageInner() {
                       <React.Fragment key={m.id}>
                         {showDate && <DateDivider label={dateLabel} />}
                         {firstUnreadIdx >= 0 && idx === firstUnreadIdx && <UnreadDivider />}
-                        <MessageBubble m={m} chatStatus={selectedChat.status} />
+                        <MessageBubble
+                          m={m}
+                          chatStatus={selectedChat.status}
+                          customerName={selectedChat.customerName}
+                        />
                       </React.Fragment>
                     );
                   })}
 
                   {showJump && (
                     <div className="sticky bottom-3 flex justify-end">
-                      <Button
-                        variant="ghost"
+                      <button
                         onClick={() => {
                           scrollToBottom("smooth");
                           setShowJump(false);
                         }}
-                        className="shadow-sm"
-                        title="Прокрутить вниз"
+                        className="px-3 py-1.5 text-xs font-medium rounded-xl bg-zinc-900 text-white shadow-sm hover:bg-zinc-800 transition font-geist"
                       >
                         Вниз ↓
-                      </Button>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1555,19 +1578,21 @@ function PageInner() {
                 <Composer onSend={sendMessage} sending={sending} />
               </div>
             )}
-          </section>
+          </main>
         </div>
       </div>
     </div>
   );
 }
 
+// ─── Page export ──────────────────────────────────────────────────────────────
+
 export default function Page() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center text-zinc-500">
-          Loading…
+        <div className="h-screen flex items-center justify-center text-zinc-500 font-geist">
+          Загрузка…
         </div>
       }
     >
