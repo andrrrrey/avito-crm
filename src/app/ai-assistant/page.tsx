@@ -41,6 +41,14 @@ function formatDate(ts: number) {
   });
 }
 
+function IconSparkles({ className }: { className?: string }) {
+  return (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .962L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z" />
+    </svg>
+  );
+}
+
 /* ─── types ─────────────────────────────────────────────────── */
 
 type AiSettings = {
@@ -331,26 +339,35 @@ export default function AiAssistantPage() {
 
   /* ─── render ────────────────────────────────────────────── */
 
+  const bgStyle = {
+    backgroundImage:
+      "url('https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/8e249747-11d9-4c29-9017-590f07779c2e_3840w.jpg')",
+    backgroundColor: "#e4e4e7",
+  };
+
   if (!settings || meData === undefined) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-zinc-400">Загрузка...</div>
+      <div className="min-h-screen flex items-center justify-center bg-cover bg-center" style={bgStyle}>
+        <div className="text-zinc-400 font-geist">Загрузка...</div>
       </div>
     );
   }
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-sm rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10 text-center">
-          <div className="text-lg font-semibold text-zinc-900 mb-2">Только для администраторов</div>
+      <div className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center" style={bgStyle}>
+        <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-zinc-900/10 text-center">
+          <div className="h-12 w-12 bg-green-400 rounded-full flex items-center justify-center mx-auto mb-4">
+            <IconSparkles className="h-5 w-5 text-zinc-900" />
+          </div>
+          <div className="text-lg font-semibold text-zinc-900 mb-2 font-geist">Только для администраторов</div>
           <p className="text-sm text-zinc-500 mb-4">
             Управление настройками ИИ доступно только администраторам платформы.
             Для настройки ваших инструкций и базы знаний перейдите в личный кабинет.
           </p>
           <button
             onClick={() => router.push("/dashboard")}
-            className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-700"
+            className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-700 transition-colors"
           >
             Перейти в личный кабинет
           </button>
@@ -360,492 +377,530 @@ export default function AiAssistantPage() {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      {/* Header */}
-      <div className="mx-auto max-w-2xl">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-zinc-900">
-              AI Ассистент
-            </h1>
-            <p className="text-sm text-zinc-500 mt-1">
-              Настройка ИИ-ассистента для ответов в чатах
-            </p>
+    <div className="min-h-screen bg-cover bg-center" style={bgStyle}>
+      <div className="min-h-screen p-0 sm:p-2 lg:p-5 flex flex-col">
+        <div className="mx-auto w-full max-w-4xl flex-1 flex flex-col bg-white rounded-none sm:rounded-2xl lg:rounded-[30px] shadow-none sm:shadow-2xl overflow-hidden">
+
+          {/* ── Header ── */}
+          <header className="border-b border-zinc-100 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4 flex items-center justify-between shrink-0 gap-2">
+            {/* Left: logo + page label */}
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="h-7 w-7 sm:h-8 sm:w-8 flex bg-green-400 rounded-full items-center justify-center shrink-0">
+                <IconSparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-zinc-900" />
+              </div>
+              <span className="text-base sm:text-lg tracking-tight font-medium font-geist">
+                AITOCRM
+              </span>
+              <span className="hidden sm:inline-flex text-[10px] px-2 py-0.5 rounded-full bg-zinc-950 text-white font-medium font-geist">
+                AI Ассистент
+              </span>
+              <span
+                className={cn(
+                  "hidden md:inline-flex text-[10px] px-2 py-0.5 rounded-full font-medium font-geist",
+                  enabled ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"
+                )}
+              >
+                {enabled ? "● Включён" : "○ Выключен"}
+              </span>
+            </div>
+
+            {/* Right: nav */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-zinc-100 hover:bg-zinc-200 transition font-geist whitespace-nowrap"
+              >
+                Кабинет
+              </button>
+              <button
+                onClick={() => router.push("/")}
+                className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-zinc-100 hover:bg-zinc-200 transition font-geist whitespace-nowrap"
+              >
+                Чаты
+              </button>
+            </div>
+          </header>
+
+          {/* ── Content ── */}
+          <div className="flex-1 overflow-y-auto p-4 md:p-8">
+            <div className="mx-auto max-w-2xl">
+
+              {/* Page title */}
+              <div className="mb-6">
+                <h1 className="text-2xl font-bold text-zinc-900 font-geist">AI Ассистент</h1>
+                <p className="text-sm text-zinc-500 mt-1 font-geist">
+                  Настройка ИИ-ассистента для ответов в чатах
+                </p>
+              </div>
+
+              {/* ── Основные настройки ── */}
+              <section className="rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+                <h2 className="text-lg font-semibold text-zinc-900 mb-4 font-geist">
+                  Основные настройки
+                </h2>
+
+                {/* Переключатель вкл/выкл */}
+                <div className="flex items-center justify-between py-3 border-b border-zinc-100">
+                  <div>
+                    <div className="text-sm font-medium text-zinc-700">
+                      Ассистент включён
+                    </div>
+                    <div className="text-xs text-zinc-500">
+                      Когда включено, ассистент будет отвечать в чатах со статусом BOT
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={enabled}
+                    onClick={() => setEnabled(!enabled)}
+                    className={cn(
+                      "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                      enabled ? "bg-sky-600" : "bg-zinc-200",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "pointer-events-none inline-block h-5 w-5 rounded-full bg-zinc-100 shadow-sm ring-0 transition-transform",
+                        enabled ? "translate-x-5" : "translate-x-0",
+                      )}
+                    />
+                  </button>
+                </div>
+
+                {/* Провайдер API */}
+                <div className="mt-4">
+                  <span className="text-sm font-medium text-zinc-700 block mb-2">
+                    Провайдер API
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setProvider("openai")}
+                      className={cn(
+                        "flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+                        provider === "openai"
+                          ? "border-sky-500 bg-sky-50 text-sky-700"
+                          : "border-zinc-300 bg-zinc-100/90 text-zinc-600 hover:bg-zinc-200/60",
+                      )}
+                    >
+                      OpenAI
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProvider("deepseek")}
+                      className={cn(
+                        "flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+                        provider === "deepseek"
+                          ? "border-sky-500 bg-sky-50 text-sky-700"
+                          : "border-zinc-300 bg-zinc-100/90 text-zinc-600 hover:bg-zinc-200/60",
+                      )}
+                    >
+                      DeepSeek
+                    </button>
+                  </div>
+                </div>
+
+                {/* OpenAI API Key */}
+                {provider === "openai" && (
+                  <label className="mt-4 block">
+                    <span className="text-sm font-medium text-zinc-700">
+                      OpenAI API Key
+                    </span>
+                    {settings.hasApiKey && !apiKeyTouched && (
+                      <span className="ml-2 text-xs text-emerald-600">
+                        (ключ установлен: {settings.apiKey})
+                      </span>
+                    )}
+                    <input
+                      type="password"
+                      placeholder="sk-..."
+                      value={apiKeyTouched ? apiKey : ""}
+                      onChange={(e) => {
+                        setApiKeyTouched(true);
+                        setApiKey(e.target.value);
+                      }}
+                      className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
+                    />
+                    <span className="text-xs text-zinc-400">
+                      Оставьте пустым, чтобы не менять
+                    </span>
+                  </label>
+                )}
+
+                {/* DeepSeek API Key */}
+                {provider === "deepseek" && (
+                  <label className="mt-4 block">
+                    <span className="text-sm font-medium text-zinc-700">
+                      DeepSeek API Key
+                    </span>
+                    {settings.hasDeepseekApiKey && !deepseekApiKeyTouched && (
+                      <span className="ml-2 text-xs text-emerald-600">
+                        (ключ установлен: {settings.deepseekApiKey})
+                      </span>
+                    )}
+                    <input
+                      type="password"
+                      placeholder="sk-..."
+                      value={deepseekApiKeyTouched ? deepseekApiKey : ""}
+                      onChange={(e) => {
+                        setDeepseekApiKeyTouched(true);
+                        setDeepseekApiKey(e.target.value);
+                      }}
+                      className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
+                    />
+                    <span className="text-xs text-zinc-400">
+                      Получить ключ можно на platform.deepseek.com. Оставьте пустым, чтобы не менять.
+                    </span>
+                  </label>
+                )}
+
+                {/* Model */}
+                <label className="mt-4 block">
+                  <span className="text-sm font-medium text-zinc-700">
+                    Модель
+                  </span>
+                  <span className="ml-1 text-xs text-rose-500">*</span>
+                  <input
+                    type="text"
+                    list="ai-models-list"
+                    placeholder={
+                      provider === "deepseek"
+                        ? "deepseek-chat"
+                        : "Введите название модели, например: gpt-4o"
+                    }
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
+                  />
+                  <datalist id="ai-models-list">
+                    {activeModels.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </datalist>
+                  <span className="text-xs text-zinc-400">
+                    Выберите из списка или введите название модели вручную
+                  </span>
+                </label>
+
+                {/* Vector Store ID — только для OpenAI */}
+                {provider === "openai" && (
+                  <label className="mt-4 block">
+                    <span className="text-sm font-medium text-zinc-700">
+                      Vector Store ID
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="vs_..."
+                      value={vectorStoreId}
+                      onChange={(e) => setVectorStoreId(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
+                    />
+                    <span className="text-xs text-zinc-400">
+                      ID векторного хранилища OpenAI для поиска по базе знаний
+                    </span>
+                  </label>
+                )}
+
+                {/* Instructions */}
+                <label className="mt-4 block">
+                  <span className="text-sm font-medium text-zinc-700">
+                    Инструкция для ассистента
+                  </span>
+                  <textarea
+                    rows={5}
+                    placeholder="Вы — вежливый помощник по продажам на Avito..."
+                    value={instructions}
+                    onChange={(e) => setInstructions(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25 resize-y"
+                  />
+                </label>
+
+                {/* Save */}
+                <div className="mt-5 flex items-center gap-3">
+                  <button
+                    onClick={saveSettings}
+                    disabled={saving}
+                    className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
+                  >
+                    {saving ? "Сохранение..." : "Сохранить"}
+                  </button>
+                  {saveMsg && (
+                    <span
+                      className={cn(
+                        "text-sm",
+                        saveMsg === "Сохранено"
+                          ? "text-emerald-600"
+                          : "text-rose-600",
+                      )}
+                    >
+                      {saveMsg}
+                    </span>
+                  )}
+                </div>
+              </section>
+
+              {/* ── Промпт переключения на менеджера ── */}
+              <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+                <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">
+                  Промпт переключения на менеджера
+                </h2>
+                <p className="text-sm text-zinc-500 mb-4">
+                  Инструкция для ИИ, описывающая когда и как переводить диалог на менеджера.
+                  Если оставить пустым — будет использоваться промпт по умолчанию.
+                </p>
+
+                <textarea
+                  rows={12}
+                  placeholder={`## Перевод на менеджера\n\nТы ОБЯЗАН добавить маркер [ESCALATE] и перевести на менеджера, если:\n- Клиент просит позвать человека...\n- ...`}
+                  value={escalatePrompt}
+                  onChange={(e) => setEscalatePrompt(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25 resize-y font-mono leading-relaxed"
+                />
+
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={saveSettings}
+                    disabled={saving}
+                    className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
+                  >
+                    {saving ? "Сохранение..." : "Сохранить"}
+                  </button>
+                  {escalatePrompt && (
+                    <button
+                      onClick={() => setEscalatePrompt("")}
+                      className="rounded-xl bg-zinc-200/80 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-900/10 hover:bg-zinc-200/90 transition-colors"
+                    >
+                      Сбросить на по умолчанию
+                    </button>
+                  )}
+                  {saveMsg && (
+                    <span
+                      className={cn(
+                        "text-sm",
+                        saveMsg === "Сохранено"
+                          ? "text-emerald-600"
+                          : "text-rose-600",
+                      )}
+                    >
+                      {saveMsg}
+                    </span>
+                  )}
+                </div>
+              </section>
+
+              {/* ── Файлы Vector Store — только для OpenAI ── */}
+              {provider === "openai" && (
+                <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+                  <h2 className="text-lg font-semibold text-zinc-900 mb-4 font-geist">
+                    Файлы Vector Store
+                  </h2>
+
+                  {!hasVectorStore ? (
+                    <p className="text-sm text-zinc-500">
+                      Укажите OpenAI API-ключ и Vector Store ID выше, чтобы управлять файлами.
+                    </p>
+                  ) : (
+                    <>
+                      {/* Upload */}
+                      <div className="flex flex-wrap items-center gap-3 mb-4">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          className="text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
+                        />
+                        <button
+                          onClick={handleUpload}
+                          disabled={uploading}
+                          className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
+                        >
+                          {uploading ? "Загрузка..." : "Загрузить"}
+                        </button>
+                      </div>
+
+                      {fileError && (
+                        <div className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-700/10">
+                          {fileError}
+                        </div>
+                      )}
+
+                      {/* File list */}
+                      {filesLoading ? (
+                        <div className="text-sm text-zinc-400 font-geist">Загрузка списка файлов...</div>
+                      ) : files.length === 0 ? (
+                        <div className="text-sm text-zinc-400 font-geist">
+                          Нет файлов в Vector Store
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm text-left">
+                            <thead>
+                              <tr className="border-b border-zinc-100 text-zinc-500">
+                                <th className="py-2 pr-4 font-medium">Имя файла</th>
+                                <th className="py-2 pr-4 font-medium">Размер</th>
+                                <th className="py-2 pr-4 font-medium">Статус</th>
+                                <th className="py-2 pr-4 font-medium">Дата</th>
+                                <th className="py-2 font-medium"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {files.map((f) => (
+                                <tr
+                                  key={f.id}
+                                  className="border-b border-zinc-200/70 hover:bg-zinc-200/50"
+                                >
+                                  <td className="py-2 pr-4 text-zinc-700">
+                                    {f.filename || f.id}
+                                  </td>
+                                  <td className="py-2 pr-4 text-zinc-500">
+                                    {formatBytes(f.bytes)}
+                                  </td>
+                                  <td className="py-2 pr-4">
+                                    <span
+                                      className={cn(
+                                        "inline-block rounded-full px-2 py-0.5 text-xs font-medium",
+                                        f.status === "completed"
+                                          ? "bg-emerald-50 text-emerald-700"
+                                          : "bg-amber-50 text-amber-700",
+                                      )}
+                                    >
+                                      {f.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 pr-4 text-zinc-500">
+                                    {formatDate(f.created_at)}
+                                  </td>
+                                  <td className="py-2">
+                                    <button
+                                      onClick={() => handleDelete(f.id)}
+                                      disabled={deletingId === f.id}
+                                      className="rounded-lg px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors"
+                                    >
+                                      {deletingId === f.id ? "..." : "Удалить"}
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
+              )}
+
+              {/* ── База знаний DeepSeek ── */}
+              {provider === "deepseek" && (
+                <section className="mt-6 mb-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+                  <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">
+                    База знаний
+                  </h2>
+                  <p className="text-sm text-zinc-500 mb-4">
+                    Загрузите файлы с информацией о товарах, услугах или FAQ.
+                    При ответе ИИ автоматически найдёт и использует релевантные данные.
+                    Поддерживаемые форматы: .txt, .md, .csv, .json, .yaml, .html
+                  </p>
+
+                  {!hasDeepseekKb ? (
+                    <p className="text-sm text-zinc-500">
+                      Сохраните DeepSeek API-ключ выше, чтобы управлять базой знаний.
+                    </p>
+                  ) : (
+                    <>
+                      {/* Upload */}
+                      <div className="flex flex-wrap items-center gap-3 mb-4">
+                        <input
+                          ref={kbFileInputRef}
+                          type="file"
+                          accept=".txt,.md,.csv,.json,.yaml,.yml,.html,.htm"
+                          className="text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
+                        />
+                        <button
+                          onClick={handleKbUpload}
+                          disabled={kbUploading}
+                          className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
+                        >
+                          {kbUploading ? "Загрузка..." : "Загрузить"}
+                        </button>
+                      </div>
+
+                      {kbFileError && (
+                        <div className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-700/10">
+                          {kbFileError}
+                        </div>
+                      )}
+
+                      {/* File list */}
+                      {kbFilesLoading ? (
+                        <div className="text-sm text-zinc-400 font-geist">Загрузка списка файлов...</div>
+                      ) : kbFiles.length === 0 ? (
+                        <div className="text-sm text-zinc-400 font-geist">
+                          База знаний пуста. Загрузите файлы выше.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm text-left">
+                            <thead>
+                              <tr className="border-b border-zinc-100 text-zinc-500">
+                                <th className="py-2 pr-4 font-medium">Имя файла</th>
+                                <th className="py-2 pr-4 font-medium">Размер</th>
+                                <th className="py-2 pr-4 font-medium">Чанков</th>
+                                <th className="py-2 pr-4 font-medium">Дата</th>
+                                <th className="py-2 font-medium"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {kbFiles.map((f) => (
+                                <tr
+                                  key={f.id}
+                                  className="border-b border-zinc-200/70 hover:bg-zinc-200/50"
+                                >
+                                  <td className="py-2 pr-4 text-zinc-700">
+                                    {f.filename}
+                                  </td>
+                                  <td className="py-2 pr-4 text-zinc-500">
+                                    {formatBytes(f.fileSize)}
+                                  </td>
+                                  <td className="py-2 pr-4 text-zinc-500">
+                                    <span className="inline-block rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
+                                      {f.chunksCount}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 pr-4 text-zinc-500">
+                                    {formatDate(f.created_at)}
+                                  </td>
+                                  <td className="py-2">
+                                    <button
+                                      onClick={() => handleKbDelete(f.id)}
+                                      disabled={kbDeletingId === f.id}
+                                      className="rounded-lg px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors"
+                                    >
+                                      {kbDeletingId === f.id ? "..." : "Удалить"}
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
+              )}
+
+              {/* bottom spacing for last section when no DeepSeek/OpenAI */}
+              {provider === "openai" && (
+                <div className="mb-6" />
+              )}
+
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push("/dashboard")}
-              className="rounded-xl bg-zinc-200/80 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-900/10 hover:bg-zinc-200/90"
-            >
-              Кабинет
-            </button>
-            <button
-              onClick={() => router.push("/")}
-              className="rounded-xl bg-zinc-200/80 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-900/10 hover:bg-zinc-200/90"
-            >
-              Чаты
-            </button>
-          </div>
+
         </div>
-
-        {/* ── Основные настройки ── */}
-        <section className="rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
-          <h2 className="text-lg font-semibold text-zinc-900 mb-4">
-            Основные настройки
-          </h2>
-
-          {/* Переключатель вкл/выкл */}
-          <div className="flex items-center justify-between py-3 border-b border-zinc-100">
-            <div>
-              <div className="text-sm font-medium text-zinc-700">
-                Ассистент включён
-              </div>
-              <div className="text-xs text-zinc-500">
-                Когда включено, ассистент будет отвечать в чатах со статусом BOT
-              </div>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={enabled}
-              onClick={() => setEnabled(!enabled)}
-              className={cn(
-                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-                enabled ? "bg-sky-600" : "bg-zinc-200",
-              )}
-            >
-              <span
-                className={cn(
-                  "pointer-events-none inline-block h-5 w-5 rounded-full bg-zinc-100 shadow-sm ring-0 transition-transform",
-                  enabled ? "translate-x-5" : "translate-x-0",
-                )}
-              />
-            </button>
-          </div>
-
-          {/* Провайдер API */}
-          <div className="mt-4">
-            <span className="text-sm font-medium text-zinc-700 block mb-2">
-              Провайдер API
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setProvider("openai")}
-                className={cn(
-                  "flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
-                  provider === "openai"
-                    ? "border-sky-500 bg-sky-50 text-sky-700"
-                    : "border-zinc-300 bg-zinc-100/90 text-zinc-600 hover:bg-zinc-200/60",
-                )}
-              >
-                OpenAI
-              </button>
-              <button
-                type="button"
-                onClick={() => setProvider("deepseek")}
-                className={cn(
-                  "flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
-                  provider === "deepseek"
-                    ? "border-sky-500 bg-sky-50 text-sky-700"
-                    : "border-zinc-300 bg-zinc-100/90 text-zinc-600 hover:bg-zinc-200/60",
-                )}
-              >
-                DeepSeek
-              </button>
-            </div>
-          </div>
-
-          {/* OpenAI API Key */}
-          {provider === "openai" && (
-            <label className="mt-4 block">
-              <span className="text-sm font-medium text-zinc-700">
-                OpenAI API Key
-              </span>
-              {settings.hasApiKey && !apiKeyTouched && (
-                <span className="ml-2 text-xs text-emerald-600">
-                  (ключ установлен: {settings.apiKey})
-                </span>
-              )}
-              <input
-                type="password"
-                placeholder="sk-..."
-                value={apiKeyTouched ? apiKey : ""}
-                onChange={(e) => {
-                  setApiKeyTouched(true);
-                  setApiKey(e.target.value);
-                }}
-                className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
-              />
-              <span className="text-xs text-zinc-400">
-                Оставьте пустым, чтобы не менять
-              </span>
-            </label>
-          )}
-
-          {/* DeepSeek API Key */}
-          {provider === "deepseek" && (
-            <label className="mt-4 block">
-              <span className="text-sm font-medium text-zinc-700">
-                DeepSeek API Key
-              </span>
-              {settings.hasDeepseekApiKey && !deepseekApiKeyTouched && (
-                <span className="ml-2 text-xs text-emerald-600">
-                  (ключ установлен: {settings.deepseekApiKey})
-                </span>
-              )}
-              <input
-                type="password"
-                placeholder="sk-..."
-                value={deepseekApiKeyTouched ? deepseekApiKey : ""}
-                onChange={(e) => {
-                  setDeepseekApiKeyTouched(true);
-                  setDeepseekApiKey(e.target.value);
-                }}
-                className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
-              />
-              <span className="text-xs text-zinc-400">
-                Получить ключ можно на platform.deepseek.com. Оставьте пустым, чтобы не менять.
-              </span>
-            </label>
-          )}
-
-          {/* Model */}
-          <label className="mt-4 block">
-            <span className="text-sm font-medium text-zinc-700">
-              Модель
-            </span>
-            <span className="ml-1 text-xs text-rose-500">*</span>
-            <input
-              type="text"
-              list="ai-models-list"
-              placeholder={
-                provider === "deepseek"
-                  ? "deepseek-chat"
-                  : "Введите название модели, например: gpt-4o"
-              }
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
-            />
-            <datalist id="ai-models-list">
-              {activeModels.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </datalist>
-            <span className="text-xs text-zinc-400">
-              Выберите из списка или введите название модели вручную
-            </span>
-          </label>
-
-          {/* Vector Store ID — только для OpenAI */}
-          {provider === "openai" && (
-            <label className="mt-4 block">
-              <span className="text-sm font-medium text-zinc-700">
-                Vector Store ID
-              </span>
-              <input
-                type="text"
-                placeholder="vs_..."
-                value={vectorStoreId}
-                onChange={(e) => setVectorStoreId(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
-              />
-              <span className="text-xs text-zinc-400">
-                ID векторного хранилища OpenAI для поиска по базе знаний
-              </span>
-            </label>
-          )}
-
-          {/* Instructions */}
-          <label className="mt-4 block">
-            <span className="text-sm font-medium text-zinc-700">
-              Инструкция для ассистента
-            </span>
-            <textarea
-              rows={5}
-              placeholder="Вы — вежливый помощник по продажам на Avito..."
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25 resize-y"
-            />
-          </label>
-
-          {/* Save */}
-          <div className="mt-5 flex items-center gap-3">
-            <button
-              onClick={saveSettings}
-              disabled={saving}
-              className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
-            >
-              {saving ? "Сохранение..." : "Сохранить"}
-            </button>
-            {saveMsg && (
-              <span
-                className={cn(
-                  "text-sm",
-                  saveMsg === "Сохранено"
-                    ? "text-emerald-600"
-                    : "text-rose-600",
-                )}
-              >
-                {saveMsg}
-              </span>
-            )}
-          </div>
-        </section>
-
-        {/* ── Промпт переключения на менеджера ── */}
-        <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
-          <h2 className="text-lg font-semibold text-zinc-900 mb-1">
-            Промпт переключения на менеджера
-          </h2>
-          <p className="text-sm text-zinc-500 mb-4">
-            Инструкция для ИИ, описывающая когда и как переводить диалог на менеджера.
-            Если оставить пустым — будет использоваться промпт по умолчанию.
-          </p>
-
-          <textarea
-            rows={12}
-            placeholder={`## Перевод на менеджера\n\nТы ОБЯЗАН добавить маркер [ESCALATE] и перевести на менеджера, если:\n- Клиент просит позвать человека...\n- ...`}
-            value={escalatePrompt}
-            onChange={(e) => setEscalatePrompt(e.target.value)}
-            className="w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25 resize-y font-mono leading-relaxed"
-          />
-
-          <div className="mt-3 flex items-center gap-3">
-            <button
-              onClick={saveSettings}
-              disabled={saving}
-              className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
-            >
-              {saving ? "Сохранение..." : "Сохранить"}
-            </button>
-            {escalatePrompt && (
-              <button
-                onClick={() => setEscalatePrompt("")}
-                className="rounded-xl bg-zinc-200/80 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-900/10 hover:bg-zinc-200/90 transition-colors"
-              >
-                Сбросить на по умолчанию
-              </button>
-            )}
-            {saveMsg && (
-              <span
-                className={cn(
-                  "text-sm",
-                  saveMsg === "Сохранено"
-                    ? "text-emerald-600"
-                    : "text-rose-600",
-                )}
-              >
-                {saveMsg}
-              </span>
-            )}
-          </div>
-        </section>
-
-        {/* ── Файлы Vector Store — только для OpenAI ── */}
-        {provider === "openai" && (
-          <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
-            <h2 className="text-lg font-semibold text-zinc-900 mb-4">
-              Файлы Vector Store
-            </h2>
-
-            {!hasVectorStore ? (
-              <p className="text-sm text-zinc-500">
-                Укажите OpenAI API-ключ и Vector Store ID выше, чтобы управлять файлами.
-              </p>
-            ) : (
-              <>
-                {/* Upload */}
-                <div className="flex items-center gap-3 mb-4">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
-                  />
-                  <button
-                    onClick={handleUpload}
-                    disabled={uploading}
-                    className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
-                  >
-                    {uploading ? "Загрузка..." : "Загрузить"}
-                  </button>
-                </div>
-
-                {fileError && (
-                  <div className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-700/10">
-                    {fileError}
-                  </div>
-                )}
-
-                {/* File list */}
-                {filesLoading ? (
-                  <div className="text-sm text-zinc-400">Загрузка списка файлов...</div>
-                ) : files.length === 0 ? (
-                  <div className="text-sm text-zinc-400">
-                    Нет файлов в Vector Store
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead>
-                        <tr className="border-b border-zinc-100 text-zinc-500">
-                          <th className="py-2 pr-4 font-medium">Имя файла</th>
-                          <th className="py-2 pr-4 font-medium">Размер</th>
-                          <th className="py-2 pr-4 font-medium">Статус</th>
-                          <th className="py-2 pr-4 font-medium">Дата</th>
-                          <th className="py-2 font-medium"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {files.map((f) => (
-                          <tr
-                            key={f.id}
-                            className="border-b border-zinc-200/70 hover:bg-zinc-200/50"
-                          >
-                            <td className="py-2 pr-4 text-zinc-700">
-                              {f.filename || f.id}
-                            </td>
-                            <td className="py-2 pr-4 text-zinc-500">
-                              {formatBytes(f.bytes)}
-                            </td>
-                            <td className="py-2 pr-4">
-                              <span
-                                className={cn(
-                                  "inline-block rounded-full px-2 py-0.5 text-xs font-medium",
-                                  f.status === "completed"
-                                    ? "bg-emerald-50 text-emerald-700"
-                                    : "bg-amber-50 text-amber-700",
-                                )}
-                              >
-                                {f.status}
-                              </span>
-                            </td>
-                            <td className="py-2 pr-4 text-zinc-500">
-                              {formatDate(f.created_at)}
-                            </td>
-                            <td className="py-2">
-                              <button
-                                onClick={() => handleDelete(f.id)}
-                                disabled={deletingId === f.id}
-                                className="rounded-lg px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors"
-                              >
-                                {deletingId === f.id ? "..." : "Удалить"}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
-            )}
-          </section>
-        )}
-
-        {/* ── База знаний DeepSeek ── */}
-        {provider === "deepseek" && (
-          <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
-            <h2 className="text-lg font-semibold text-zinc-900 mb-1">
-              База знаний
-            </h2>
-            <p className="text-sm text-zinc-500 mb-4">
-              Загрузите файлы с информацией о товарах, услугах или FAQ.
-              При ответе ИИ автоматически найдёт и использует релевантные данные.
-              Поддерживаемые форматы: .txt, .md, .csv, .json, .yaml, .html
-            </p>
-
-            {!hasDeepseekKb ? (
-              <p className="text-sm text-zinc-500">
-                Сохраните DeepSeek API-ключ выше, чтобы управлять базой знаний.
-              </p>
-            ) : (
-              <>
-                {/* Upload */}
-                <div className="flex items-center gap-3 mb-4">
-                  <input
-                    ref={kbFileInputRef}
-                    type="file"
-                    accept=".txt,.md,.csv,.json,.yaml,.yml,.html,.htm"
-                    className="text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
-                  />
-                  <button
-                    onClick={handleKbUpload}
-                    disabled={kbUploading}
-                    className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
-                  >
-                    {kbUploading ? "Загрузка..." : "Загрузить"}
-                  </button>
-                </div>
-
-                {kbFileError && (
-                  <div className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-700/10">
-                    {kbFileError}
-                  </div>
-                )}
-
-                {/* File list */}
-                {kbFilesLoading ? (
-                  <div className="text-sm text-zinc-400">Загрузка списка файлов...</div>
-                ) : kbFiles.length === 0 ? (
-                  <div className="text-sm text-zinc-400">
-                    База знаний пуста. Загрузите файлы выше.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead>
-                        <tr className="border-b border-zinc-100 text-zinc-500">
-                          <th className="py-2 pr-4 font-medium">Имя файла</th>
-                          <th className="py-2 pr-4 font-medium">Размер</th>
-                          <th className="py-2 pr-4 font-medium">Чанков</th>
-                          <th className="py-2 pr-4 font-medium">Дата</th>
-                          <th className="py-2 font-medium"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {kbFiles.map((f) => (
-                          <tr
-                            key={f.id}
-                            className="border-b border-zinc-200/70 hover:bg-zinc-200/50"
-                          >
-                            <td className="py-2 pr-4 text-zinc-700">
-                              {f.filename}
-                            </td>
-                            <td className="py-2 pr-4 text-zinc-500">
-                              {formatBytes(f.fileSize)}
-                            </td>
-                            <td className="py-2 pr-4 text-zinc-500">
-                              <span className="inline-block rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
-                                {f.chunksCount}
-                              </span>
-                            </td>
-                            <td className="py-2 pr-4 text-zinc-500">
-                              {formatDate(f.created_at)}
-                            </td>
-                            <td className="py-2">
-                              <button
-                                onClick={() => handleKbDelete(f.id)}
-                                disabled={kbDeletingId === f.id}
-                                className="rounded-lg px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors"
-                              >
-                                {kbDeletingId === f.id ? "..." : "Удалить"}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
-            )}
-          </section>
-        )}
       </div>
     </div>
   );
