@@ -906,6 +906,17 @@ function PageInner() {
 
   const [mobileTab, setMobileTab] = useState<ChatStatus>("MANAGER");
 
+  // Ограничение видимых элементов в каждой колонке.
+  // Рендерим только первые N карточек; кнопка "Показать ещё" добавляет по VISIBLE_STEP.
+  const VISIBLE_STEP = 50;
+  const [visibleBot, setVisibleBot] = useState(VISIBLE_STEP);
+  const [visibleMan, setVisibleMan] = useState(VISIBLE_STEP);
+  const [visibleInactive, setVisibleInactive] = useState(VISIBLE_STEP);
+
+
+  // Лимит за один запрос — достаточно большой чтобы показать все актуальные чаты,
+  // но не настолько огромный, чтобы парализовать браузер при тысячах записей.
+  const API_LIMIT = "500";
 
   const qsBOT = useMemo(() => {
     const f = filters.BOT;
@@ -918,7 +929,7 @@ function PageInner() {
       u.set("sortField", "lastMessageAt");
       u.set("sortOrder", f.sortOrder);
     }
-    u.set("limit", "5000");
+    u.set("limit", API_LIMIT);
     if (f.unreadOnly) u.set("unreadOnly", "1");
     return u.toString();
   }, [filters.BOT]);
@@ -934,7 +945,7 @@ function PageInner() {
       u.set("sortField", "lastMessageAt");
       u.set("sortOrder", f.sortOrder);
     }
-    u.set("limit", "5000");
+    u.set("limit", API_LIMIT);
     if (f.unreadOnly) u.set("unreadOnly", "1");
     return u.toString();
   }, [filters.MANAGER]);
@@ -950,7 +961,7 @@ function PageInner() {
       u.set("sortField", "lastMessageAt");
       u.set("sortOrder", f.sortOrder);
     }
-    u.set("limit", "5000");
+    u.set("limit", API_LIMIT);
     return u.toString();
   }, [filters.INACTIVE]);
 
@@ -970,19 +981,19 @@ function PageInner() {
   const { data: botData, mutate: mutateBOT } = useSWR<any>(
     `/api/chats?${qsBOT}`,
     fetcher,
-    { refreshInterval: listRefresh, revalidateOnFocus: true }
+    { refreshInterval: listRefresh, revalidateOnFocus: false }
   );
 
   const { data: manData, mutate: mutateMAN } = useSWR<any>(
     `/api/chats?${qsMAN}`,
     fetcher,
-    { refreshInterval: listRefresh, revalidateOnFocus: true }
+    { refreshInterval: listRefresh, revalidateOnFocus: false }
   );
 
   const { data: inactiveData, mutate: mutateINACTIVE } = useSWR<any>(
     `/api/chats?${qsINACTIVE}`,
     fetcher,
-    { refreshInterval: listRefresh, revalidateOnFocus: true }
+    { refreshInterval: listRefresh, revalidateOnFocus: false }
   );
 
   const botChats: ChatItem[] = useMemo(
@@ -1028,7 +1039,8 @@ function PageInner() {
         !filters.BOT.priceSort,
         filters.BOT.sortOrder
       ),
-    [botChatsUI, filters.BOT.labelFilter, !filters.BOT.priceSort, filters.BOT.sortOrder]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [botChatsUI, filters.BOT.labelFilter, filters.BOT.priceSort, filters.BOT.sortOrder]
   );
 
   const manChatsDisplay: ChatItem[] = useMemo(
@@ -1039,7 +1051,8 @@ function PageInner() {
         !filters.MANAGER.priceSort,
         filters.MANAGER.sortOrder
       ),
-    [manChatsUI, filters.MANAGER.labelFilter, !filters.MANAGER.priceSort, filters.MANAGER.sortOrder]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [manChatsUI, filters.MANAGER.labelFilter, filters.MANAGER.priceSort, filters.MANAGER.sortOrder]
   );
 
   const inactiveChatsDisplay: ChatItem[] = useMemo(
@@ -1050,8 +1063,14 @@ function PageInner() {
         !filters.INACTIVE.priceSort,
         filters.INACTIVE.sortOrder
       ),
-    [inactiveChats, filters.INACTIVE.labelFilter, !filters.INACTIVE.priceSort, filters.INACTIVE.sortOrder]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inactiveChats, filters.INACTIVE.labelFilter, filters.INACTIVE.priceSort, filters.INACTIVE.sortOrder]
   );
+
+  // При смене фильтров сбрасываем счётчик видимых элементов
+  useEffect(() => { setVisibleBot(VISIBLE_STEP); }, [filters.BOT.labelFilter, filters.BOT.priceSort, filters.BOT.sortOrder, filters.BOT.unreadOnly]);
+  useEffect(() => { setVisibleMan(VISIBLE_STEP); }, [filters.MANAGER.labelFilter, filters.MANAGER.priceSort, filters.MANAGER.sortOrder, filters.MANAGER.unreadOnly]);
+  useEffect(() => { setVisibleInactive(VISIBLE_STEP); }, [filters.INACTIVE.labelFilter, filters.INACTIVE.priceSort, filters.INACTIVE.sortOrder]);
 
 const botUnreadCount = useMemo(
   () => botChatsDisplay.reduce((s, c) => s + ((c.unreadCount ?? 0) > 0 || c.manualUnread ? 1 : 0), 0),
@@ -1223,12 +1242,14 @@ const selectedChatExternalUrl = useMemo(() => {
     const pending = { lists: false, timer: 0 as any };
     const scheduleFlush = () => {
       if (pending.timer) return;
+      // Дебаунс 400мс: группируем пакетные события (напр. массовое обновление цен),
+      // чтобы не вызывать рефетч на каждое SSE-сообщение отдельно.
       pending.timer = window.setTimeout(async () => {
         pending.timer = 0;
         if (!pending.lists) return;
         pending.lists = false;
         await Promise.all([mutateBOT(), mutateMAN(), mutateINACTIVE()]).catch(() => null);
-      }, 120);
+      }, 400);
     };
 
     /** Мгновенное обновление SWR-кэша списка чатов из chatSnapshot */
@@ -1475,7 +1496,10 @@ const selectedChatExternalUrl = useMemo(() => {
       unreadCount: 0,
     };
 
-    await Promise.all([mutateBOT(), mutateMAN()]);
+    // Обновляем только колонку текущего чата
+    const chatStatus = selectedChat?.status;
+    if (chatStatus === "MANAGER") await mutateMAN();
+    else await mutateBOT();
     await markMessagesReadLocally().catch(() => null);
   }
 
@@ -1748,12 +1772,17 @@ const sendMessage = useCallback(
         requestAnimationFrame(() => scrollToBottom("smooth"));
       }
 
-      await Promise.all([mutateBOT(), mutateMAN(), mutateINACTIVE()]);
+      // Обновляем только колонку текущего чата — не нужно рефетчить все три сразу
+      const status = selectedChat?.status;
+      if (status === "BOT") await mutateBOT();
+      else if (status === "MANAGER") await mutateMAN();
+      else await Promise.all([mutateBOT(), mutateMAN()]);
     } finally {
       setSending(false);
     }
   },
-  [selectedChatId, mutateMsgs, mutateBOT, mutateMAN, mutateINACTIVE]
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [selectedChatId, selectedChat?.status, mutateMsgs, mutateBOT, mutateMAN]
 );
 
 
@@ -1918,28 +1947,38 @@ const sendMessage = useCallback(
                   Неактивных сделок нет
                 </div>
               ) : (
-                inactiveChatsDisplay.map((c) => (
-                  <div key={c.id} className="relative group">
-                    <ChatCard
-                      chat={c}
-                      selected={c.id === selectedChatId}
-                      onSelect={selectChat}
-                      onSetLabel={setChatLabel}
-                      showPin={false}
-                    />
+                <>
+                  {inactiveChatsDisplay.slice(0, visibleInactive).map((c) => (
+                    <div key={c.id} className="relative group">
+                      <ChatCard
+                        chat={c}
+                        selected={c.id === selectedChatId}
+                        onSelect={selectChat}
+                        onSetLabel={setChatLabel}
+                        showPin={false}
+                      />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          reactivateChat(c);
+                        }}
+                        className="absolute top-2 right-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition inline-flex items-center rounded-lg bg-emerald-600/10 px-2 py-0.5 text-[11px] font-medium text-emerald-800 ring-1 ring-emerald-700/20 hover:bg-emerald-600/20"
+                        title="Вернуть в работу (BOT)"
+                      >
+                        <span className="hidden sm:inline">Реактивировать</span>
+                        <span className="sm:hidden">→ BOT</span>
+                      </button>
+                    </div>
+                  ))}
+                  {inactiveChatsDisplay.length > visibleInactive && (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        reactivateChat(c);
-                      }}
-                      className="absolute top-2 right-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition inline-flex items-center rounded-lg bg-emerald-600/10 px-2 py-0.5 text-[11px] font-medium text-emerald-800 ring-1 ring-emerald-700/20 hover:bg-emerald-600/20"
-                      title="Вернуть в работу (BOT)"
+                      onClick={() => setVisibleInactive((v) => v + VISIBLE_STEP)}
+                      className="w-full rounded-2xl py-2 text-xs text-zinc-500 hover:text-zinc-800 hover:bg-zinc-900/5 transition"
                     >
-                      <span className="hidden sm:inline">Реактивировать</span>
-                      <span className="sm:hidden">→ BOT</span>
+                      Показать ещё ({inactiveChatsDisplay.length - visibleInactive} скрыто)
                     </button>
-                  </div>
-                ))
+                  )}
+                </>
               )}
             </div>
           </section>
@@ -1985,17 +2024,27 @@ const sendMessage = useCallback(
                   Тут пока пусто
                 </div>
               ) : (
-                botChatsDisplay.map((c) => (
-                  <ChatCard
-                    onEscalate={escalateChat}
-                    onSetLabel={setChatLabel}
-                    key={c.id}
-                    chat={c}
-                    selected={c.id === selectedChatId}
-                    onSelect={selectChat}
-                    showPin={false}
-                  />
-                ))
+                <>
+                  {botChatsDisplay.slice(0, visibleBot).map((c) => (
+                    <ChatCard
+                      onEscalate={escalateChat}
+                      onSetLabel={setChatLabel}
+                      key={c.id}
+                      chat={c}
+                      selected={c.id === selectedChatId}
+                      onSelect={selectChat}
+                      showPin={false}
+                    />
+                  ))}
+                  {botChatsDisplay.length > visibleBot && (
+                    <button
+                      onClick={() => setVisibleBot((v) => v + VISIBLE_STEP)}
+                      className="w-full rounded-2xl py-2 text-xs text-zinc-500 hover:text-zinc-800 hover:bg-zinc-900/5 transition"
+                    >
+                      Показать ещё ({botChatsDisplay.length - visibleBot} скрыто)
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </section>
@@ -2047,17 +2096,27 @@ const sendMessage = useCallback(
                   Тут пока пусто
                 </div>
               ) : (
-                manChatsDisplay.map((c) => (
-                  <ChatCard
-                    key={c.id}
-                    chat={c}
-                    selected={c.id === selectedChatId}
-                    onSelect={selectChat}
-                    onSetLabel={setChatLabel}
-                    onTogglePin={togglePin}
-                    showPin={true}
-                  />
-                ))
+                <>
+                  {manChatsDisplay.slice(0, visibleMan).map((c) => (
+                    <ChatCard
+                      key={c.id}
+                      chat={c}
+                      selected={c.id === selectedChatId}
+                      onSelect={selectChat}
+                      onSetLabel={setChatLabel}
+                      onTogglePin={togglePin}
+                      showPin={true}
+                    />
+                  ))}
+                  {manChatsDisplay.length > visibleMan && (
+                    <button
+                      onClick={() => setVisibleMan((v) => v + VISIBLE_STEP)}
+                      className="w-full rounded-2xl py-2 text-xs text-zinc-500 hover:text-zinc-800 hover:bg-zinc-900/5 transition"
+                    >
+                      Показать ещё ({manChatsDisplay.length - visibleMan} скрыто)
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </section>
