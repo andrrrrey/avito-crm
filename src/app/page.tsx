@@ -16,6 +16,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
+// Количество чатов, загружаемых за один раз.
+// Меньшее значение снижает нагрузку на браузер при большом числе диалогов.
+const CHAT_PAGE_SIZE = 300;
+
 type ChatStatus = "BOT" | "MANAGER" | "INACTIVE";
 type SortOrder = "asc" | "desc";
 
@@ -491,7 +495,7 @@ function PageInner() {
       u.set("sortField", "lastMessageAt");
       u.set("sortOrder", f.sortOrder);
     }
-    u.set("limit", "5000");
+    u.set("limit", String(CHAT_PAGE_SIZE));
     if (f.unreadOnly) u.set("unreadOnly", "1");
     return u.toString();
   }, [filters.BOT]);
@@ -507,7 +511,7 @@ function PageInner() {
       u.set("sortField", "lastMessageAt");
       u.set("sortOrder", f.sortOrder);
     }
-    u.set("limit", "5000");
+    u.set("limit", String(CHAT_PAGE_SIZE));
     if (f.unreadOnly) u.set("unreadOnly", "1");
     return u.toString();
   }, [filters.MANAGER]);
@@ -523,7 +527,7 @@ function PageInner() {
       u.set("sortField", "lastMessageAt");
       u.set("sortOrder", f.sortOrder);
     }
-    u.set("limit", "5000");
+    u.set("limit", String(CHAT_PAGE_SIZE));
     return u.toString();
   }, [filters.INACTIVE]);
 
@@ -532,25 +536,29 @@ function PageInner() {
   const refreshedChatsRef = useRef<Set<string>>(new Set());
   const selectedChatCacheRef = useRef<Record<string, ChatItem>>({});
 
-  const listRefresh = rtConnected ? 30_000 : 1500;
-  const msgRefresh = rtConnected ? 15_000 : 1500;
+  // Интервалы обновления: при активном SSE — редко (SSE сам присылает изменения),
+  // при отключённом SSE — раз в 10 секунд (раньше было 1.5с → грузило браузер).
+  const listRefresh = rtConnected ? 60_000 : 10_000;
+  const msgRefresh = rtConnected ? 30_000 : 10_000;
 
+  // revalidateOnFocus: false — SSE обновляет данные в реальном времени,
+  // лишний запрос при переключении вкладки только грузит браузер.
   const { data: botData, mutate: mutateBOT } = useSWR<any>(
     `/api/chats?${qsBOT}`,
     fetcher,
-    { refreshInterval: listRefresh, revalidateOnFocus: true }
+    { refreshInterval: listRefresh, revalidateOnFocus: false }
   );
 
   const { data: manData, mutate: mutateMAN } = useSWR<any>(
     `/api/chats?${qsMAN}`,
     fetcher,
-    { refreshInterval: listRefresh, revalidateOnFocus: true }
+    { refreshInterval: listRefresh, revalidateOnFocus: false }
   );
 
   const { data: inactiveData, mutate: mutateINACTIVE } = useSWR<any>(
     `/api/chats?${qsINACTIVE}`,
     fetcher,
-    { refreshInterval: listRefresh, revalidateOnFocus: true }
+    { refreshInterval: listRefresh, revalidateOnFocus: false }
   );
 
   const botChats: ChatItem[] = useMemo(
@@ -654,7 +662,7 @@ function PageInner() {
   const { data: msgData, mutate: mutateMsgs } = useSWR<any>(
     selectedChatId ? `/api/chats/${selectedChatId}/messages` : null,
     fetcher,
-    { refreshInterval: msgRefresh, revalidateOnFocus: true }
+    { refreshInterval: msgRefresh, revalidateOnFocus: false }
   );
 
   const rawMsgItems: MessageItem[] = (msgData?.items ?? msgData?.messages ?? []) as MessageItem[];
@@ -954,12 +962,27 @@ function PageInner() {
 
     await apiFetch(`/api/chats/${chatId}/read`, { method: "POST" }).catch(() => null);
 
+    // Обновляем счётчик локально без полного перезапроса списка
+    const patchCache = (cur: any) => {
+      if (!cur) return cur;
+      const items: ChatItem[] = (cur.items ?? cur.chats ?? []) as ChatItem[];
+      const idx = items.findIndex((c) => c.id === chatId);
+      if (idx < 0) return cur;
+      const next = [...items];
+      next[idx] = { ...next[idx], unreadCount: 0 };
+      if (Array.isArray(cur.items)) return { ...cur, items: next };
+      return { ...cur, chats: next };
+    };
+
     selectedChatCacheRef.current[chatId] = {
       ...selectedChatCacheRef.current[chatId],
       unreadCount: 0,
     };
 
-    await Promise.all([mutateBOT(), mutateMAN()]);
+    await Promise.all([
+      mutateBOT(patchCache, { revalidate: false }),
+      mutateMAN(patchCache, { revalidate: false }),
+    ]);
     await markMessagesReadLocally().catch(() => null);
   }
 
@@ -1425,7 +1448,11 @@ function PageInner() {
                 </div>
               ) : (
                 activeChats.map((chat) => (
-                  <div key={chat.id} className="relative group">
+                  <div
+                    key={chat.id}
+                    className="relative group"
+                    style={{ contentVisibility: "auto", containIntrinsicSize: "0 88px" }}
+                  >
                     <ChatCard
                       chat={chat}
                       selected={chat.id === selectedChatId}

@@ -3,6 +3,8 @@
 // Дожимы бота: если бот написал клиенту, а клиент не отвечает 1 час —
 // бот пишет сообщение-напоминание (только в чаты с ИИ ботом, без менеджера).
 // Если после дожима нет ответа в течение суток — чат переводится в INACTIVE.
+// Также: если клиент написал что уже купил/получил/заказал — дожим не отправляется.
+// Если с клиента нет активности больше 24 часов — чат переводится в INACTIVE.
 //
 // Запускать по крону: POST /api/cron/followup?token=<CRM_CRON_TOKEN>
 // (каждые 5–10 минут)
@@ -22,9 +24,59 @@ export const dynamic = "force-dynamic";
 const FOLLOWUP_TEXT = "Актуален ли ваш заказ?";
 
 // Таймауты
-const FOLLOWUP_DELAY_MS = 60 * 60 * 1000;     // 1 час без ответа → дожим
+const FOLLOWUP_DELAY_MS = 60 * 60 * 1000;       // 1 час без ответа → дожим
 const FOLLOWUP_MAX_AGE_MS = 2 * 60 * 60 * 1000; // дожим только если чат не старее 2 часов
-const INACTIVE_DELAY_MS = 24 * 60 * 60 * 1000; // 24 часа после дожима → INACTIVE
+const INACTIVE_DELAY_MS = 24 * 60 * 60 * 1000;  // 24 часа после дожима → INACTIVE
+const INACTIVE_NO_FOLLOWUP_MS = 24 * 60 * 60 * 1000; // 24 часа без активности → INACTIVE
+
+// Ключевые слова: клиент уже купил / получил / не заинтересован
+const PURCHASED_RE =
+  /(?:уже\s+)?(?:купил[аи]?|заказал[аи]?|получил[аи]?|приобрёл|приобрел|нашёл|нашел|нашла)\b/iu;
+const NOT_INTERESTED_RE =
+  /не\s+(?:актуально|актуален|актуальна|нужно|нужен|нужна|интересует|интересно)|(?:не\s+буду|отменил[аи]?|отказ(?:ываюсь|ался|алась)|раздумал[аи]?|спасибо[\s,]*не\s+надо)/iu;
+
+/** Проверяет, написал ли клиент что-то вроде "уже купил/получил/не нужно" */
+function clientAlreadyPurchased(messages: Array<{ direction: string; text: string }>): boolean {
+  // Проверяем последние 5 входящих сообщений
+  const inMsgs = messages
+    .filter((m) => m.direction === "IN")
+    .slice(-5);
+
+  return inMsgs.some(
+    (m) => PURCHASED_RE.test(m.text) || NOT_INTERESTED_RE.test(m.text)
+  );
+}
+
+/** Публикует SSE-снэпшот после обновления чата */
+async function publishChatSnapshot(chatId: string, avitoChatId: string) {
+  const snap = await prisma.chat.findUnique({
+    where: { id: chatId },
+    select: {
+      id: true, status: true, customerName: true, itemTitle: true, price: true,
+      lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,
+      unreadCount: true, pinned: true,
+    },
+  });
+
+  publish({
+    type: "chat_updated",
+    chatId,
+    avitoChatId,
+    chatSnapshot: snap ? {
+      id: snap.id,
+      status: snap.status as any,
+      customerName: snap.customerName,
+      itemTitle: snap.itemTitle,
+      price: snap.price,
+      lastMessageAt: snap.lastMessageAt?.toISOString() ?? null,
+      lastMessageText: snap.lastMessageText,
+      adUrl: snap.adUrl,
+      chatUrl: snap.chatUrl,
+      unreadCount: snap.unreadCount,
+      pinned: snap.pinned,
+    } : undefined,
+  });
+}
 
 export async function POST(req: Request) {
   const guard = requireCronToken(req);
@@ -34,10 +86,13 @@ export async function POST(req: Request) {
   const followupThreshold = new Date(now.getTime() - FOLLOWUP_DELAY_MS);
   const followupMaxAgeThreshold = new Date(now.getTime() - FOLLOWUP_MAX_AGE_MS);
   const inactiveThreshold = new Date(now.getTime() - INACTIVE_DELAY_MS);
+  const inactiveNoFollowupThreshold = new Date(now.getTime() - INACTIVE_NO_FOLLOWUP_MS);
 
   const stats = {
     followupsSent: 0,
     markedInactive: 0,
+    skippedPurchased: 0,
+    skippedDuplicate: 0,
     errors: 0,
   };
 
@@ -58,8 +113,8 @@ export async function POST(req: Request) {
       raw: true,
       messages: {
         orderBy: { sentAt: "desc" },
-        take: 1,
-        select: { direction: true, sentAt: true },
+        take: 10,
+        select: { direction: true, sentAt: true, text: true },
       },
     },
   });
@@ -69,6 +124,42 @@ export async function POST(req: Request) {
     // бот уже ответил клиенту, но клиент не написал в ответ.
     const lastMsg = chat.messages[0];
     if (!lastMsg || lastMsg.direction !== "OUT") continue;
+
+    // Проверка 1: не отправляем дожим если текст дожима уже есть в истории
+    const alreadySentFollowup = chat.messages.some(
+      (m: { direction: string; text: string }) => m.direction === "OUT" && m.text.trim() === FOLLOWUP_TEXT.trim()
+    );
+    if (alreadySentFollowup) {
+      stats.skippedDuplicate++;
+      // Если фраза уже была, ставим followupSentAt чтобы не проверять снова
+      await prisma.chat.update({
+        where: { id: chat.id },
+        data: { followupSentAt: lastMsg.sentAt },
+      }).catch(() => null);
+      continue;
+    }
+
+    // Проверка 2: не отправляем дожим если клиент уже написал "купил/получил/не нужно"
+    if (clientAlreadyPurchased(chat.messages)) {
+      stats.skippedPurchased++;
+      // Переводим в INACTIVE, раз клиент уже не заинтересован
+      const rawObj = (chat.raw && typeof chat.raw === "object") ? (chat.raw as any) : {};
+      await prisma.chat.update({
+        where: { id: chat.id },
+        data: {
+          status: "INACTIVE",
+          raw: {
+            ...rawObj,
+            inactive: {
+              markedAt: new Date().toISOString(),
+              reason: "client_purchased_or_not_interested",
+            },
+          },
+        },
+      }).catch(() => null);
+      await publishChatSnapshot(chat.id, chat.avitoChatId).catch(() => null);
+      continue;
+    }
 
     try {
       const sentAt = new Date();
@@ -107,34 +198,7 @@ export async function POST(req: Request) {
           },
         });
 
-        // Снэпшот для SSE
-        const snap = await prisma.chat.findUnique({
-          where: { id: chat.id },
-          select: {
-            id: true, status: true, customerName: true, itemTitle: true, price: true,
-            lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,
-            unreadCount: true, pinned: true,
-          },
-        });
-
-        publish({
-          type: "chat_updated",
-          chatId: chat.id,
-          avitoChatId: chat.avitoChatId,
-          chatSnapshot: snap ? {
-            id: snap.id,
-            status: snap.status as any,
-            customerName: snap.customerName,
-            itemTitle: snap.itemTitle,
-            price: snap.price,
-            lastMessageAt: snap.lastMessageAt?.toISOString() ?? null,
-            lastMessageText: snap.lastMessageText,
-            adUrl: snap.adUrl,
-            chatUrl: snap.chatUrl,
-            unreadCount: snap.unreadCount,
-            pinned: snap.pinned,
-          } : undefined,
-        });
+        await publishChatSnapshot(chat.id, chat.avitoChatId);
 
         publish({
           type: "message_created",
@@ -192,33 +256,7 @@ export async function POST(req: Request) {
           },
         });
 
-        const snap = await prisma.chat.findUnique({
-          where: { id: chat.id },
-          select: {
-            id: true, status: true, customerName: true, itemTitle: true, price: true,
-            lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,
-            unreadCount: true, pinned: true,
-          },
-        });
-
-        publish({
-          type: "chat_updated",
-          chatId: chat.id,
-          avitoChatId: chat.avitoChatId,
-          chatSnapshot: snap ? {
-            id: snap.id,
-            status: snap.status as any,
-            customerName: snap.customerName,
-            itemTitle: snap.itemTitle,
-            price: snap.price,
-            lastMessageAt: snap.lastMessageAt?.toISOString() ?? null,
-            lastMessageText: snap.lastMessageText,
-            adUrl: snap.adUrl,
-            chatUrl: snap.chatUrl,
-            unreadCount: snap.unreadCount,
-            pinned: snap.pinned,
-          } : undefined,
-        });
+        await publishChatSnapshot(chat.id, chat.avitoChatId);
 
         stats.followupsSent++;
       }
@@ -228,10 +266,10 @@ export async function POST(req: Request) {
     }
   }
 
-  // ─── Шаг 2: Перевод в INACTIVE ──────────────────────────────────────────────
+  // ─── Шаг 2: Перевод в INACTIVE после дожима ─────────────────────────────────
   // Ищем BOT-чаты, где:
   // - followupSentAt IS NOT NULL (дожим уже отправлен)
-  // - followupSentAt < 1 часа назад (прошло достаточно времени)
+  // - followupSentAt более 24 часов назад
   // - нет новых IN-сообщений после followupSentAt (клиент не ответил)
   const chatsForInactive = await prisma.chat.findMany({
     where: {
@@ -274,37 +312,66 @@ export async function POST(req: Request) {
         },
       });
 
-      const snap = await prisma.chat.findUnique({
-        where: { id: chat.id },
-        select: {
-          id: true, status: true, customerName: true, itemTitle: true, price: true,
-          lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,
-          unreadCount: true, pinned: true,
-        },
-      });
-
-      publish({
-        type: "chat_updated",
-        chatId: chat.id,
-        avitoChatId: chat.avitoChatId,
-        chatSnapshot: snap ? {
-          id: snap.id,
-          status: snap.status as any,
-          customerName: snap.customerName,
-          itemTitle: snap.itemTitle,
-          price: snap.price,
-          lastMessageAt: snap.lastMessageAt?.toISOString() ?? null,
-          lastMessageText: snap.lastMessageText,
-          adUrl: snap.adUrl,
-          chatUrl: snap.chatUrl,
-          unreadCount: snap.unreadCount,
-          pinned: snap.pinned,
-        } : undefined,
-      });
+      await publishChatSnapshot(chat.id, chat.avitoChatId);
 
       stats.markedInactive++;
     } catch (e) {
       console.error(`[followup] Error marking chat ${chat.id} as inactive:`, e);
+      stats.errors++;
+    }
+  }
+
+  // ─── Шаг 3: Перевод в INACTIVE при 24ч без активности клиента ───────────────
+  // Ищем BOT-чаты, где дожим ещё не был отправлен,
+  // но с момента последнего сообщения от клиента прошло >24 часов.
+  // Это ловит "старые" чаты (> 2 часов), которые вышли за окно дожима.
+  const chatsInactiveNoFollowup = await prisma.chat.findMany({
+    where: {
+      status: "BOT",
+      followupSentAt: null,
+      // Чат создан (или последнее сообщение было) более 24 часов назад
+      lastMessageAt: { lt: inactiveNoFollowupThreshold },
+    },
+    select: {
+      id: true,
+      avitoChatId: true,
+      raw: true,
+      messages: {
+        where: { direction: "IN" },
+        orderBy: { sentAt: "desc" },
+        take: 1,
+        select: { sentAt: true },
+      },
+    },
+  });
+
+  for (const chat of chatsInactiveNoFollowup) {
+    // Клиент не писал вообще, или последнее сообщение от клиента > 24ч назад
+    const lastInMsg = chat.messages[0];
+    if (lastInMsg && lastInMsg.sentAt > inactiveNoFollowupThreshold) continue;
+
+    try {
+      const rawObj = (chat.raw && typeof chat.raw === "object") ? (chat.raw as any) : {};
+
+      await prisma.chat.update({
+        where: { id: chat.id },
+        data: {
+          status: "INACTIVE",
+          raw: {
+            ...rawObj,
+            inactive: {
+              markedAt: new Date().toISOString(),
+              reason: "no_client_activity_24h",
+            },
+          },
+        },
+      });
+
+      await publishChatSnapshot(chat.id, chat.avitoChatId);
+
+      stats.markedInactive++;
+    } catch (e) {
+      console.error(`[followup] Error marking chat ${chat.id} as inactive (24h):`, e);
       stats.errors++;
     }
   }
