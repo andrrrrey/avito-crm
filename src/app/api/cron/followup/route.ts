@@ -156,6 +156,16 @@ export async function POST(req: Request) {
       continue;
     }
 
+    // Проверка 3: пропускаем если фраза-дожим уже была в истории чата.
+    // Это защищает от повторной отправки после реактивации чата (followupSentAt сбрасывается).
+    const hasFollowupInHistory = chat.messages.some(
+      (msg) => msg.direction === "OUT" && msg.text?.trim() === FOLLOWUP_TEXT,
+    );
+    if (hasFollowupInHistory) {
+      console.log(`[followup] Skip chat ${chat.id}: followup phrase already in message history`);
+      continue;
+    }
+
     try {
       const sentAt = new Date();
       const rawObj = (chat.raw && typeof chat.raw === "object") ? (chat.raw as any) : {};
@@ -397,6 +407,95 @@ export async function POST(req: Request) {
       stats.markedInactive++;
     } catch (e) {
       console.error(`[followup] Error marking chat ${chat.id} as inactive:`, e);
+      stats.errors++;
+    }
+  }
+
+  // ─── Шаг 3: INACTIVE напрямую (нет ответа клиента 24ч, дожим не отправлялся) ─
+  // Ищем BOT-чаты, где:
+  // - followupSentAt IS NULL (не пойман шагом 2)
+  // - есть хотя бы одно IN-сообщение (клиент когда-то писал)
+  // - последнее IN-сообщение старше 24 часов
+  //
+  // Типичный кейс: бот ответил, клиент не отреагировал; дожим не был послан
+  // (например, из-за окна FOLLOWUP_MAX_AGE_MS или по другой причине).
+  const chatsForDirectInactive = await prisma.chat.findMany({
+    where: {
+      status: "BOT",
+      followupSentAt: null,
+    },
+    select: {
+      id: true,
+      avitoChatId: true,
+      raw: true,
+      messages: {
+        where: { direction: "IN" },
+        orderBy: { sentAt: "desc" },
+        take: 1,
+        select: { sentAt: true },
+      },
+    },
+  });
+
+  for (const chat of chatsForDirectInactive) {
+    const lastInMsg = chat.messages[0];
+
+    // Нет ни одного входящего сообщения — клиент никогда не писал, пропускаем
+    if (!lastInMsg) continue;
+
+    // Клиент писал менее 24 часов назад — ещё ждём
+    if (lastInMsg.sentAt > inactiveThreshold) continue;
+
+    try {
+      const rawObj = (chat.raw && typeof chat.raw === "object") ? (chat.raw as any) : {};
+
+      await prisma.chat.update({
+        where: { id: chat.id },
+        data: {
+          status: "INACTIVE",
+          raw: {
+            ...rawObj,
+            inactive: {
+              markedAt: new Date().toISOString(),
+              reason: "no_client_activity_24h",
+            },
+          },
+        },
+      });
+
+      const snap = await prisma.chat.findUnique({
+        where: { id: chat.id },
+        select: {
+          id: true, status: true, customerName: true, itemTitle: true, price: true,
+          lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,
+          unreadCount: true, pinned: true, manualUnread: true, labelColor: true,
+        },
+      });
+
+      publish({
+        type: "chat_updated",
+        chatId: chat.id,
+        avitoChatId: chat.avitoChatId,
+        chatSnapshot: snap ? {
+          id: snap.id,
+          status: snap.status as any,
+          customerName: snap.customerName,
+          itemTitle: snap.itemTitle,
+          price: snap.price,
+          lastMessageAt: snap.lastMessageAt?.toISOString() ?? null,
+          lastMessageText: snap.lastMessageText,
+          adUrl: snap.adUrl,
+          chatUrl: snap.chatUrl,
+          unreadCount: snap.unreadCount,
+          pinned: snap.pinned,
+          manualUnread: (snap as any).manualUnread ?? false,
+          labelColor: (snap as any).labelColor ?? null,
+        } : undefined,
+      });
+
+      stats.markedInactive++;
+    } catch (e) {
+      console.error(`[followup] Error marking chat ${chat.id} as inactive (direct):`, e);
       stats.errors++;
     }
   }
