@@ -97,14 +97,16 @@ export async function POST(req: Request) {
     errors: 0,
   };
 
-  // Получаем accountId пользователей, у которых дожим отключён
+  // Получаем accountId пользователей, у которых дожим отключён.
+  // Если пользователь использует env-переменные (avitoAccountId === null в БД),
+  // подставляем env.AVITO_ACCOUNT_ID как его эффективный accountId.
   const usersWithFollowupDisabled = await prisma.user.findMany({
-    where: { followupEnabled: false, avitoAccountId: { not: null } },
+    where: { followupEnabled: false },
     select: { avitoAccountId: true },
   });
   const disabledAccountIds = usersWithFollowupDisabled
-    .map((u) => u.avitoAccountId!)
-    .filter(Boolean);
+    .map((u) => u.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null)
+    .filter((id): id is number => id !== null && id !== 0);
 
   // ─── Шаг 1: Дожим ───────────────────────────────────────────────────────────
   // Ищем BOT-чаты, где:
