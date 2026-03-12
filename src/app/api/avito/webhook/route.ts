@@ -881,7 +881,8 @@ export async function POST(req: Request) {
     }
 
     // ✅ Dev-бот и AI-ассистент — fire-and-forget, параллельно, не блокируем webhook
-    if (res.direction === "IN" && res.avitoChatId) {
+    // Запускаем только если сообщение новое (res.created), чтобы не отвечать на дубликаты вебхуков
+    if (res.direction === "IN" && res.avitoChatId && res.created) {
       // Dev-бот (только для dev/test) — отдельный fire-and-forget
       runDevTestBotIfNeeded({
         chatId: res.chatId,
