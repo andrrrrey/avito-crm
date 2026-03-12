@@ -53,6 +53,7 @@ type UserSettings = {
   avitoAccountId: number | null;
   aiInstructions: string;
   aiEscalatePrompt: string;
+  followupEnabled: boolean;
 };
 
 type KbFile = {
@@ -99,6 +100,7 @@ export default function DashboardPage() {
   const [avitoAccountId, setAvitoAccountId] = useState("");
   const [aiInstructions, setAiInstructions] = useState("");
   const [aiEscalatePrompt, setAiEscalatePrompt] = useState("");
+  const [followupEnabled, setFollowupEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
@@ -108,6 +110,7 @@ export default function DashboardPage() {
     setAvitoAccountId(settings.avitoAccountId ? String(settings.avitoAccountId) : "");
     setAiInstructions(settings.aiInstructions ?? "");
     setAiEscalatePrompt(settings.aiEscalatePrompt ?? "");
+    setFollowupEnabled(settings.followupEnabled ?? true);
     setAvitoClientSecret("");
     setAvitoClientSecretTouched(false);
   }, [settings]);
@@ -121,6 +124,7 @@ export default function DashboardPage() {
         avitoAccountId: avitoAccountId ? Number(avitoAccountId) : null,
         aiInstructions,
         aiEscalatePrompt,
+        followupEnabled,
       };
       if (avitoClientSecretTouched && avitoClientSecret) {
         payload.avitoClientSecret = avitoClientSecret;
@@ -145,7 +149,7 @@ export default function DashboardPage() {
     }
   }, [
     avitoClientId, avitoClientSecret, avitoClientSecretTouched,
-    avitoAccountId, aiInstructions, aiEscalatePrompt, mutateSettings,
+    avitoAccountId, aiInstructions, aiEscalatePrompt, followupEnabled, mutateSettings,
   ]);
 
   // Knowledge base
@@ -408,6 +412,53 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="mt-4 flex items-center gap-3">
+                  <button
+                    onClick={saveSettings}
+                    disabled={saving}
+                    className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
+                  >
+                    {saving ? "Сохранение..." : "Сохранить"}
+                  </button>
+                  {saveMsg && (
+                    <span className={saveMsg === "Сохранено" ? "text-sm text-emerald-600" : "text-sm text-rose-600"}>
+                      {saveMsg}
+                    </span>
+                  )}
+                </div>
+              </section>
+
+              {/* ── Дожим бота ── */}
+              <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+                <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">Дожим ИИ-ботом</h2>
+                <p className="text-sm text-zinc-500 mb-4">
+                  Если включено, бот автоматически отправляет сообщение «Актуален ли ваш заказ?»
+                  клиентам, которые не ответили в течение 1 часа.
+                </p>
+
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={followupEnabled}
+                    onClick={() => setFollowupEnabled((v) => !v)}
+                    className={[
+                      "relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200",
+                      followupEnabled ? "bg-sky-600" : "bg-zinc-300",
+                    ].join(" ")}
+                  >
+                    <span
+                      className={[
+                        "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200",
+                        followupEnabled ? "translate-x-5" : "translate-x-0",
+                      ].join(" ")}
+                    />
+                  </button>
+                  <span className="text-sm font-medium text-zinc-700">
+                    {followupEnabled ? "Дожим включён" : "Дожим отключён"}
+                  </span>
+                </label>
+
+                <div className="mt-5 flex items-center gap-3">
                   <button
                     onClick={saveSettings}
                     disabled={saving}

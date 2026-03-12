@@ -26,6 +26,7 @@ export async function GET(req: Request) {
       avitoAccountId: true,
       aiInstructions: true,
       aiEscalatePrompt: true,
+      followupEnabled: true,
     },
   });
 
@@ -43,6 +44,7 @@ export async function GET(req: Request) {
       avitoAccountId: user.avitoAccountId ?? null,
       aiInstructions: user.aiInstructions ?? "",
       aiEscalatePrompt: user.aiEscalatePrompt ?? "",
+      followupEnabled: user.followupEnabled,
     },
   });
 }
@@ -66,6 +68,7 @@ export async function PUT(req: Request) {
     avitoAccountId,
     aiInstructions,
     aiEscalatePrompt,
+    followupEnabled,
   } = body;
 
   const data: Record<string, unknown> = {};
@@ -82,6 +85,7 @@ export async function PUT(req: Request) {
   }
   if (typeof aiInstructions === "string") data.aiInstructions = aiInstructions || null;
   if (typeof aiEscalatePrompt === "string") data.aiEscalatePrompt = aiEscalatePrompt || null;
+  if (typeof followupEnabled === "boolean") data.followupEnabled = followupEnabled;
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ ok: false, error: "nothing_to_update" }, { status: 400 });
@@ -100,6 +104,7 @@ export async function PUT(req: Request) {
       avitoAccountId: true,
       aiInstructions: true,
       aiEscalatePrompt: true,
+      followupEnabled: true,
     },
   });
 
@@ -115,6 +120,7 @@ export async function PUT(req: Request) {
       avitoAccountId: user.avitoAccountId ?? null,
       aiInstructions: user.aiInstructions ?? "",
       aiEscalatePrompt: user.aiEscalatePrompt ?? "",
+      followupEnabled: user.followupEnabled,
     },
   });
 }

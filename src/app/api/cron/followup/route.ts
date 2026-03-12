@@ -93,18 +93,30 @@ export async function POST(req: Request) {
     markedInactive: 0,
     skippedPurchased: 0,
     skippedDuplicate: 0,
+    skippedFollowupDisabled: 0,
     errors: 0,
   };
+
+  // Получаем accountId пользователей, у которых дожим отключён
+  const usersWithFollowupDisabled = await prisma.user.findMany({
+    where: { followupEnabled: false, avitoAccountId: { not: null } },
+    select: { avitoAccountId: true },
+  });
+  const disabledAccountIds = usersWithFollowupDisabled
+    .map((u) => u.avitoAccountId!)
+    .filter(Boolean);
 
   // ─── Шаг 1: Дожим ───────────────────────────────────────────────────────────
   // Ищем BOT-чаты, где:
   // - followupSentAt IS NULL (дожим ещё не отправлялся)
   // - lastMessageAt от 1 до 2 часов назад (чат "свежий", но клиент не ответил)
+  // - accountId не принадлежит пользователям с отключённым дожимом
   const chatsForFollowup = await prisma.chat.findMany({
     where: {
       status: "BOT",
       followupSentAt: null,
       lastMessageAt: { lt: followupThreshold, gt: followupMaxAgeThreshold },
+      ...(disabledAccountIds.length > 0 ? { accountId: { notIn: disabledAccountIds } } : {}),
     },
     select: {
       id: true,
