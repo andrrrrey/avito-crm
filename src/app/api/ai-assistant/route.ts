@@ -32,6 +32,7 @@ export async function GET(req: Request) {
       instructions: settings.instructions ?? "",
       escalatePrompt: settings.escalatePrompt ?? "",
       model: settings.model ?? "",
+      followupEnabled: settings.followupEnabled,
     },
   });
 }
@@ -49,7 +50,7 @@ export async function PUT(req: Request) {
     );
   }
 
-  const { enabled, provider, apiKey, deepseekApiKey, vectorStoreId, instructions, escalatePrompt, model } = body;
+  const { enabled, provider, apiKey, deepseekApiKey, vectorStoreId, instructions, escalatePrompt, model, followupEnabled } = body;
 
   const data: Record<string, unknown> = {};
 
@@ -61,6 +62,7 @@ export async function PUT(req: Request) {
   if (typeof instructions === "string") data.instructions = instructions || null;
   if (typeof escalatePrompt === "string") data.escalatePrompt = escalatePrompt || null;
   if (typeof model === "string") data.model = model || null;
+  if (typeof followupEnabled === "boolean") data.followupEnabled = followupEnabled;
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json(
@@ -88,6 +90,7 @@ export async function PUT(req: Request) {
       instructions: settings.instructions ?? "",
       escalatePrompt: settings.escalatePrompt ?? "",
       model: settings.model ?? "",
+      followupEnabled: settings.followupEnabled,
     },
   });
 }

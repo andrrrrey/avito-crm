@@ -146,6 +146,7 @@ model AiAssistant {
   instructions    String?
   escalatePrompt  String?
   model           String?
+  followupEnabled Boolean  @default(true)        // Включить/выключить дожимы
   updatedAt       DateTime @updatedAt
 }
 

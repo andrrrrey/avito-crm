@@ -99,6 +99,13 @@ export async function POST(req: Request) {
   const guard = requireCronToken(req);
   if (guard) return guard;
 
+  // Проверяем, включена ли функция дожимов в настройках ИИ
+  const aiSettings = await prisma.aiAssistant.findUnique({ where: { id: 1 } });
+  if (aiSettings && aiSettings.followupEnabled === false) {
+    console.log("[followup] Skipping: followup disabled in AI settings");
+    return NextResponse.json({ ok: true, skipped: true, reason: "followup_disabled", stats: { followupsSent: 0, markedInactive: 0, errors: 0 } });
+  }
+
   const now = new Date();
   const followupThreshold = new Date(now.getTime() - FOLLOWUP_DELAY_MS);
   const followupMaxAgeThreshold = new Date(now.getTime() - FOLLOWUP_MAX_AGE_MS);

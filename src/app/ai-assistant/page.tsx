@@ -54,6 +54,7 @@ type AiSettings = {
   instructions: string;
   escalatePrompt: string;
   model: string;
+  followupEnabled: boolean;
 };
 
 type VsFile = {
@@ -113,6 +114,7 @@ export default function AiAssistantPage() {
   const [instructions, setInstructions] = useState("");
   const [escalatePrompt, setEscalatePrompt] = useState("");
   const [model, setModel] = useState("");
+  const [followupEnabled, setFollowupEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
@@ -125,6 +127,7 @@ export default function AiAssistantPage() {
     setInstructions(settings.instructions);
     setEscalatePrompt(settings.escalatePrompt);
     setModel(settings.model);
+    setFollowupEnabled(settings.followupEnabled ?? true);
     setApiKey("");
     setApiKeyTouched(false);
     setDeepseekApiKey("");
@@ -184,6 +187,7 @@ export default function AiAssistantPage() {
         instructions,
         escalatePrompt,
         model,
+        followupEnabled,
       };
       if (apiKeyTouched && apiKey) {
         payload.apiKey = apiKey;
@@ -212,7 +216,7 @@ export default function AiAssistantPage() {
   }, [
     enabled, provider, apiKey, apiKeyTouched,
     deepseekApiKey, deepseekApiKeyTouched,
-    vectorStoreId, instructions, escalatePrompt, model, mutateSettings,
+    vectorStoreId, instructions, escalatePrompt, model, followupEnabled, mutateSettings,
   ]);
 
   const handleUpload = useCallback(async () => {
@@ -384,6 +388,35 @@ export default function AiAssistantPage() {
                 className={cn(
                   "pointer-events-none inline-block h-5 w-5 rounded-full bg-zinc-100 shadow-sm ring-0 transition-transform",
                   enabled ? "translate-x-5" : "translate-x-0",
+                )}
+              />
+            </button>
+          </div>
+
+          {/* Переключатель дожимов */}
+          <div className="flex items-center justify-between py-3 border-b border-zinc-100">
+            <div>
+              <div className="text-sm font-medium text-zinc-700">
+                Дожимы включены
+              </div>
+              <div className="text-xs text-zinc-500">
+                Бот автоматически напишет «Актуален ли ваш заказ?» если клиент не отвечает 1 час
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={followupEnabled}
+              onClick={() => setFollowupEnabled(!followupEnabled)}
+              className={cn(
+                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                followupEnabled ? "bg-sky-600" : "bg-zinc-200",
+              )}
+            >
+              <span
+                className={cn(
+                  "pointer-events-none inline-block h-5 w-5 rounded-full bg-zinc-100 shadow-sm ring-0 transition-transform",
+                  followupEnabled ? "translate-x-5" : "translate-x-0",
                 )}
               />
             </button>
