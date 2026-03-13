@@ -99,11 +99,23 @@ export async function POST(req: Request) {
   const guard = requireCronToken(req);
   if (guard) return guard;
 
-  // Проверяем, включена ли функция дожимов в настройках ИИ
+  // Проверяем настройки ИИ-ассистента.
+  // Дожимы (Шаг 1) отправляются только если:
+  //   1. Запись настроек существует
+  //   2. Ассистент включён (enabled = true) — бот активен
+  //   3. Дожимы включены (followupEnabled = true)
+  //
+  // Шаги 2 и 3 (перевод чатов в INACTIVE) выполняются всегда, независимо
+  // от этих настроек — управление жизненным циклом чата не зависит от дожимов.
   const aiSettings = await prisma.aiAssistant.findUnique({ where: { id: 1 } });
-  if (!aiSettings || !aiSettings.followupEnabled) {
-    console.log("[followup] Skipping: followup disabled in AI settings");
-    return NextResponse.json({ ok: true, skipped: true, reason: "followup_disabled", stats: { followupsSent: 0, markedInactive: 0, errors: 0 } });
+  const canSendFollowup = !!(aiSettings?.enabled && aiSettings?.followupEnabled);
+
+  if (!canSendFollowup) {
+    console.log("[followup] Step 1 skipped: followup disabled or bot disabled", {
+      settingsFound: !!aiSettings,
+      enabled: aiSettings?.enabled,
+      followupEnabled: aiSettings?.followupEnabled,
+    });
   }
 
   const now = new Date();
@@ -121,6 +133,10 @@ export async function POST(req: Request) {
   // Ищем BOT-чаты, где:
   // - followupSentAt IS NULL (дожим ещё не отправлялся)
   // - lastMessageAt от 1 до 2 часов назад (чат "свежий", но клиент не ответил)
+  //
+  // Шаг 1 выполняется ТОЛЬКО если canSendFollowup = true.
+  // Шаги 2 и 3 выполняются всегда (управление жизненным циклом чата).
+  if (canSendFollowup) {
   const chatsForFollowup = await prisma.chat.findMany({
     where: {
       status: "BOT",
@@ -334,6 +350,7 @@ export async function POST(req: Request) {
       stats.errors++;
     }
   }
+  } // end if (canSendFollowup)
 
   // ─── Шаг 2: Перевод в INACTIVE ──────────────────────────────────────────────
   // Ищем BOT-чаты, где:
