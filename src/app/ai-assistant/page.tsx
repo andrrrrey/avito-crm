@@ -339,15 +339,9 @@ export default function AiAssistantPage() {
 
   /* ─── render ────────────────────────────────────────────── */
 
-  const bgStyle = {
-    backgroundImage:
-      "url('https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/8e249747-11d9-4c29-9017-590f07779c2e_3840w.jpg')",
-    backgroundColor: "#e4e4e7",
-  };
-
   if (!settings || meData === undefined) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-cover bg-center" style={bgStyle}>
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-zinc-400 font-geist">Загрузка...</div>
       </div>
     );
@@ -355,7 +349,7 @@ export default function AiAssistantPage() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center" style={bgStyle}>
+      <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-zinc-900/10 text-center">
           <div className="h-12 w-12 bg-green-400 rounded-full flex items-center justify-center mx-auto mb-4">
             <IconSparkles className="h-5 w-5 text-zinc-900" />
@@ -377,7 +371,7 @@ export default function AiAssistantPage() {
   }
 
   return (
-    <div className="min-h-screen bg-cover bg-center" style={bgStyle}>
+    <div className="min-h-screen">
       <div className="min-h-screen p-0 sm:p-2 lg:p-5 flex flex-col">
         <div className="mx-auto w-full max-w-4xl flex-1 flex flex-col bg-white rounded-none sm:rounded-2xl lg:rounded-[30px] shadow-none sm:shadow-2xl overflow-hidden">
 

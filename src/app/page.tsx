@@ -1149,12 +1149,7 @@ function PageInner() {
      *   lg      – full 20px padding as in desktop design
      */
     <div
-      className="h-screen p-0 sm:p-2 lg:p-5 bg-cover bg-center"
-      style={{
-        backgroundImage:
-          "url('https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/8e249747-11d9-4c29-9017-590f07779c2e_3840w.jpg')",
-        backgroundColor: "#e4e4e7",
-      }}
+      className="h-screen p-0 sm:p-2 lg:p-5"
     >
       {/*
        * App card:

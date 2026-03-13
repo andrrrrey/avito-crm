@@ -1,6 +1,7 @@
 // src/app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
+import AuroraBackground from "@/components/AuroraBackground";
 
 export const metadata: Metadata = {
   title: "AITOCRM — Console",
@@ -18,7 +19,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="h-full text-zinc-900">{children}</body>
+      <body className="h-full text-zinc-900">
+        <AuroraBackground />
+        <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
+          {children}
+        </div>
+      </body>
     </html>
   );
 }
