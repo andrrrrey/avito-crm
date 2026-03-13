@@ -246,12 +246,7 @@ export default function DashboardPage() {
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center"
-      style={{
-        backgroundImage:
-          "url('https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/8e249747-11d9-4c29-9017-590f07779c2e_3840w.jpg')",
-        backgroundColor: "#e4e4e7",
-      }}
+      className="min-h-screen"
     >
       <div className="min-h-screen p-0 sm:p-2 lg:p-5 flex flex-col">
         <div className="mx-auto w-full max-w-4xl flex-1 flex flex-col bg-white rounded-none sm:rounded-2xl lg:rounded-[30px] shadow-none sm:shadow-2xl overflow-hidden">
