@@ -108,12 +108,21 @@ export async function POST(req: Request) {
     .map((u) => u.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null)
     .filter((id): id is number => id !== null && id !== 0);
 
+  // Если есть пользователи с отключённым дожимом, но мы не смогли определить
+  // ни один их accountId (avitoAccountId=null и AVITO_ACCOUNT_ID не задан),
+  // то мы не знаем, каким чатам принадлежит этот аккаунт — пропускаем шаг 1.
+  const hasUnresolvableDisabledUsers =
+    usersWithFollowupDisabled.length > 0 && disabledAccountIds.length === 0;
+
   // ─── Шаг 1: Дожим ───────────────────────────────────────────────────────────
   // Ищем BOT-чаты, где:
   // - followupSentAt IS NULL (дожим ещё не отправлялся)
   // - lastMessageAt от 1 до 2 часов назад (чат "свежий", но клиент не ответил)
   // - accountId не принадлежит пользователям с отключённым дожимом
-  const chatsForFollowup = await prisma.chat.findMany({
+  if (hasUnresolvableDisabledUsers) {
+    console.log("[cron/followup] Шаг 1 пропущен: дожим отключён, но AVITO_ACCOUNT_ID не задан — невозможно определить чаты аккаунта.");
+  }
+  const chatsForFollowup = hasUnresolvableDisabledUsers ? [] : await prisma.chat.findMany({
     where: {
       status: "BOT",
       followupSentAt: null,
