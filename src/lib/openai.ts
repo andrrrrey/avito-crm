@@ -2,6 +2,7 @@
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { buildKnowledgeContext, hasKnowledgeFiles } from "@/lib/knowledge-base";
+import { chargeAiMessage, hasEnoughBalance } from "@/lib/billing";
 
 /** Дефолтная инструкция для ассистента: когда переводить на менеджера */
 export const DEFAULT_ESCALATE_INSTRUCTION = `
@@ -83,6 +84,15 @@ export async function getAssistantReply(
   const userSettings = chat?.accountId
     ? await getUserSettingsByAccountId(chat.accountId)
     : null;
+
+  // Проверяем баланс до вызова AI (если billing настроен)
+  if (userSettings?.id) {
+    const enough = await hasEnoughBalance(userSettings.id);
+    if (!enough) {
+      console.log(`[AI] Skip: insufficient balance for user ${userSettings.id}`);
+      return null;
+    }
+  }
 
   if (provider === "deepseek") {
     return getDeepSeekReply(chatId, incomingText, settings, userSettings);
@@ -205,6 +215,23 @@ async function getOpenAIReply(
     reply = reply.replace(/【[^】]*†[^】]*】/g, "").replace(/\s{2,}/g, " ").trim();
   }
 
+  // Биллинг: списываем с пользователя по реальному usage из ответа
+  if (reply && userSettings?.id && response.usage) {
+    const chargeResult = await chargeAiMessage({
+      userId:      userSettings.id,
+      chatId,
+      model:       settings.model!,
+      usage: {
+        inputTokens:  response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+      },
+    });
+    if (!chargeResult.charged && chargeResult.reason === "insufficient_balance") {
+      console.log(`[AI][OpenAI] Billing: insufficient balance after generation, suppressing reply`);
+      return null;
+    }
+  }
+
   console.log(`[AI][OpenAI] Got reply for chat ${chatId}: "${(reply ?? "").slice(0, 100)}"`);
   return reply || null;
 }
@@ -299,6 +326,23 @@ async function getDeepSeekReply(
   });
 
   const reply = completion.choices[0]?.message?.content?.trim() ?? null;
+
+  // Биллинг: списываем с пользователя по реальному usage из ответа
+  if (reply && userSettings?.id && completion.usage) {
+    const chargeResult = await chargeAiMessage({
+      userId:      userSettings.id,
+      chatId,
+      model:       settings.model!,
+      usage: {
+        inputTokens:  completion.usage.prompt_tokens,
+        outputTokens: completion.usage.completion_tokens,
+      },
+    });
+    if (!chargeResult.charged && chargeResult.reason === "insufficient_balance") {
+      console.log(`[AI][DeepSeek] Billing: insufficient balance after generation, suppressing reply`);
+      return null;
+    }
+  }
 
   console.log(`[AI][DeepSeek] Got reply for chat ${chatId}: "${(reply ?? "").slice(0, 100)}"`);
   return reply || null;

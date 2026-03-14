@@ -18,6 +18,13 @@ enum MessageDirection {
   OUT
 }
 
+enum TransactionType {
+  TOPUP
+  CHARGE
+  REFUND
+  BONUS
+}
+
 model Chat {
   id              String   @id @default(cuid())
   createdAt       DateTime @default(now())
@@ -122,6 +129,9 @@ model User {
 
   sessions           Session[]
   knowledgeBaseFiles KnowledgeBaseFile[]
+  balance            UserBalance?
+  transactions       BalanceTransaction[]
+  aiBillings         AiMessageBilling[]
 }
 
 model Session {
@@ -174,4 +184,82 @@ model KnowledgeBaseChunk {
   chunkIndex Int
 
   @@index([fileId])
+}
+
+// ─── Биллинг ─────────────────────────────────────────────────────────────────
+
+// Конфиг биллинга (синглтон, id=1): наценка, курс, прайсы провайдеров
+model BillingConfig {
+  id Int @id @default(1)
+
+  // Множитель наценки: 2.5 = стоимость × 2.5 (т.е. наценка 150%)
+  markupMultiplier    Decimal @db.Decimal(6, 3) @default(2.5)
+
+  // Курс USD → RUB (обновляется вручную через админку)
+  usdToRub            Decimal @db.Decimal(8, 4) @default(90)
+
+  // Цены OpenAI GPT-5.2 (USD за 1 млн токенов)
+  gpt52InputPrice     Decimal @db.Decimal(10, 4) @default(15)
+  gpt52OutputPrice    Decimal @db.Decimal(10, 4) @default(60)
+
+  // Цены DeepSeek Chat (USD за 1 млн токенов)
+  deepseekInputPrice  Decimal @db.Decimal(10, 4) @default(0.27)
+  deepseekOutputPrice Decimal @db.Decimal(10, 4) @default(1.10)
+
+  updatedAt DateTime @updatedAt
+}
+
+// Баланс пользователя (в рублях)
+model UserBalance {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance   Decimal  @db.Decimal(12, 4) @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+// Детальный лог каждого AI-ответа с полным расчётом
+model AiMessageBilling {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatId           String
+
+  model            String   // "gpt-5.2", "deepseek-chat" и т.д.
+  inputTokens      Int
+  outputTokens     Int
+
+  // Все параметры расчёта сохраняются в момент списания (снэпшот конфига)
+  inputPriceUsd    Decimal  @db.Decimal(10, 6)  // цена input токенов на момент ответа
+  outputPriceUsd   Decimal  @db.Decimal(10, 6)  // цена output токенов на момент ответа
+  usdToRub         Decimal  @db.Decimal(8, 4)
+  markupMultiplier Decimal  @db.Decimal(6, 3)
+
+  costUsd          Decimal  @db.Decimal(10, 6)  // себестоимость в USD
+  costRub          Decimal  @db.Decimal(10, 4)  // себестоимость в RUB
+  chargedRub       Decimal  @db.Decimal(10, 4)  // списано с пользователя в RUB
+  profitRub        Decimal  @db.Decimal(10, 4)  // наш доход = charged - cost
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+// Все движения по балансу: пополнения, списания, бонусы
+model BalanceTransaction {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type         TransactionType
+  amount       Decimal         @db.Decimal(12, 4)  // + пополнение, − списание
+  balanceAfter Decimal         @db.Decimal(12, 4)  // баланс после транзакции
+
+  description  String?
+  aiMessageId  String?         // ссылка на AiMessageBilling если type=CHARGE
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
