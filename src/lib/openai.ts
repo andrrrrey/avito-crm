@@ -122,6 +122,14 @@ async function getOpenAIReply(
     console.log(`[AI][OpenAI] WARNING: no vectorStoreId configured — file_search disabled`);
   }
 
+  // Если дожимы выключены — явно запрещаем ИИ самостоятельно спрашивать об актуальности заказа,
+  // чтобы он не дублировал эту функцию в своих ответах.
+  if (!settings.followupEnabled) {
+    instructions +=
+      "\n\nВАЖНО: Не спрашивай клиента «Актуален ли ваш заказ?» или аналогичные вопросы о том, " +
+      "актуален ли заказ/интерес. Отвечай только на то, что пишет клиент.";
+  }
+
   const tools: OpenAI.Responses.Tool[] = [];
   if (settings.vectorStoreId) {
     tools.push({
@@ -245,6 +253,13 @@ async function getDeepSeekReply(
     }
   }
 
+  // Если дожимы выключены — явно запрещаем ИИ самостоятельно спрашивать об актуальности заказа.
+  if (!settings.followupEnabled) {
+    systemContent +=
+      "\n\nВАЖНО: Не спрашивай клиента «Актуален ли ваш заказ?» или аналогичные вопросы о том, " +
+      "актуален ли заказ/интерес. Отвечай только на то, что пишет клиент.";
+  }
+
   // Загружаем историю чата
   const historyMessages = await buildInputFromHistory(chatId, incomingText);
 
@@ -284,7 +299,7 @@ async function buildInputFromHistory(
       where: { chatId },
       orderBy: { sentAt: "asc" },
       take: MAX_HISTORY_MESSAGES,
-      select: { direction: true, text: true, sentAt: true },
+      select: { direction: true, text: true, sentAt: true, raw: true },
     });
 
     const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
@@ -299,6 +314,12 @@ async function buildInputFromHistory(
         continue;
       }
       if (msg.text.trim().length === 0) continue;
+
+      // Пропускаем сообщения-дожимы (отправленные кроном), чтобы ИИ
+      // не воспринимал их как свои ответы и не повторял «Актуален ли ваш заказ?»
+      // когда функция дожимов отключена.
+      const rawObj = msg.raw as Record<string, unknown> | null;
+      if (rawObj?.from === "bot_followup") continue;
 
       messages.push({
         role: msg.direction === "IN" ? "user" : "assistant",
