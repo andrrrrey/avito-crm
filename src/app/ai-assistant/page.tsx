@@ -42,9 +42,6 @@ type AiSettings = {
   hasApiKey: boolean;
   deepseekApiKey: string | null;
   hasDeepseekApiKey: boolean;
-  vectorStoreId: string;
-  instructions: string;
-  escalatePrompt: string;
   model: string;
 };
 
@@ -90,9 +87,6 @@ export default function AiAssistantPage() {
   const [apiKeyTouched, setApiKeyTouched] = useState(false);
   const [deepseekApiKey, setDeepseekApiKey] = useState("");
   const [deepseekApiKeyTouched, setDeepseekApiKeyTouched] = useState(false);
-  const [vectorStoreId, setVectorStoreId] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [escalatePrompt, setEscalatePrompt] = useState("");
   const [model, setModel] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -103,9 +97,6 @@ export default function AiAssistantPage() {
     if (!settings) return;
     setEnabled(settings.enabled);
     setProvider((settings.provider as "openai" | "deepseek") ?? "openai");
-    setVectorStoreId(settings.vectorStoreId);
-    setInstructions(settings.instructions);
-    setEscalatePrompt(settings.escalatePrompt);
     setModel(settings.model);
     setApiKey("");
     setApiKeyTouched(false);
@@ -124,9 +115,6 @@ export default function AiAssistantPage() {
       const payload: Record<string, unknown> = {
         enabled,
         provider,
-        vectorStoreId,
-        instructions,
-        escalatePrompt,
         model,
       };
       if (apiKeyTouched && apiKey) {
@@ -156,7 +144,7 @@ export default function AiAssistantPage() {
   }, [
     enabled, provider, apiKey, apiKeyTouched,
     deepseekApiKey, deepseekApiKeyTouched,
-    vectorStoreId, instructions, escalatePrompt, model, mutateSettings,
+    model, mutateSettings,
   ]);
 
   /* ─── render ────────────────────────────────────────────── */
@@ -416,25 +404,6 @@ export default function AiAssistantPage() {
                     Выберите из списка или введите название модели вручную
                   </span>
                 </label>
-
-                {/* Vector Store ID — только для OpenAI */}
-                {provider === "openai" && (
-                  <label className="mt-4 block">
-                    <span className="text-sm font-medium text-zinc-700">
-                      Vector Store ID
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="vs_..."
-                      value={vectorStoreId}
-                      onChange={(e) => setVectorStoreId(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
-                    />
-                    <span className="text-xs text-zinc-400">
-                      ID векторного хранилища OpenAI для поиска по базе знаний
-                    </span>
-                  </label>
-                )}
 
                 {/* Save */}
                 <div className="mt-5 flex items-center gap-3">
