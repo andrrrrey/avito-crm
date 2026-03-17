@@ -6,6 +6,11 @@ import AuroraBackground from "@/components/AuroraBackground";
 export const metadata: Metadata = {
   title: "AITOCRM — ИИ CRM для Авито",
   description: "Avito CRM с AI-ответами",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

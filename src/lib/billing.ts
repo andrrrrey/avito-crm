@@ -40,8 +40,8 @@ export async function chargeAiMessage(params: {
   const isGpt = isGptModel(params.model);
   const inputPriceUsd  = isGpt ? Number(config.gpt52InputPrice)     : Number(config.deepseekInputPrice);
   const outputPriceUsd = isGpt ? Number(config.gpt52OutputPrice)    : Number(config.deepseekOutputPrice);
-  const usdToRub       = Number(config.usdToRub);
-  const markup         = Number(config.markupMultiplier);
+  const usdToRub       = isGpt ? Number(config.openaiUsdToRub)      : Number(config.deepseekUsdToRub);
+  const markup         = isGpt ? Number(config.openaiMarkupMultiplier) : Number(config.deepseekMarkupMultiplier);
 
   const costUsd    = (params.usage.inputTokens  * inputPriceUsd  / 1_000_000)
                    + (params.usage.outputTokens * outputPriceUsd / 1_000_000);
@@ -137,8 +137,8 @@ export async function hasEnoughBalance(userId: string): Promise<boolean> {
   const minCostRub =
     (1000 * Number(config.deepseekInputPrice) / 1_000_000 +
       100 * Number(config.deepseekOutputPrice) / 1_000_000) *
-    Number(config.usdToRub) *
-    Number(config.markupMultiplier);
+    Number(config.deepseekUsdToRub) *
+    Number(config.deepseekMarkupMultiplier);
 
   return Number(balance.balance) >= minCostRub;
 }

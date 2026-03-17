@@ -31,9 +31,26 @@ function IconBilling({ className }: { className?: string }) {
   );
 }
 
+// Справочные рыночные цены провайдеров (USD за 1M токенов)
+// Обновляется вручную при изменении цен провайдеров
+const PROVIDER_REFERENCE_PRICES: Record<string, { input: number; output: number; label: string }> = {
+  "gpt-5.2":            { input: 15,    output: 60,   label: "GPT-5.2 Thinking" },
+  "gpt-5.2-chat-latest":{ input: 3,     output: 15,   label: "GPT-5.2 Instant" },
+  "gpt-4.1":            { input: 2,     output: 8,    label: "GPT-4.1" },
+  "gpt-4.1-mini":       { input: 0.4,   output: 1.6,  label: "GPT-4.1 Mini" },
+  "gpt-4.1-nano":       { input: 0.1,   output: 0.4,  label: "GPT-4.1 Nano" },
+  "gpt-4o":             { input: 2.5,   output: 10,   label: "GPT-4o" },
+  "gpt-4o-mini":        { input: 0.15,  output: 0.6,  label: "GPT-4o Mini" },
+  "o3-mini":            { input: 1.1,   output: 4.4,  label: "o3-mini" },
+  "deepseek-chat":      { input: 0.27,  output: 1.10, label: "DeepSeek Chat (V3)" },
+  "deepseek-reasoner":  { input: 0.55,  output: 2.19, label: "DeepSeek Reasoner (R1)" },
+};
+
 type BillingConfig = {
-  markupMultiplier: number;
-  usdToRub: number;
+  openaiMarkupMultiplier: number;
+  openaiUsdToRub: number;
+  deepseekMarkupMultiplier: number;
+  deepseekUsdToRub: number;
   gpt52InputPrice: number;
   gpt52OutputPrice: number;
   deepseekInputPrice: number;
@@ -51,19 +68,24 @@ export default function BillingSettingsPage() {
   const isAdmin = meData?.user?.role === "ADMIN";
   const config = configData?.data;
 
-  const [markup, setMarkup] = useState("");
-  const [usdToRub, setUsdToRub] = useState("");
+  const [openaiMarkup, setOpenaiMarkup] = useState("");
+  const [openaiUsdToRub, setOpenaiUsdToRub] = useState("");
+  const [deepseekMarkup, setDeepseekMarkup] = useState("");
+  const [deepseekUsdToRub, setDeepseekUsdToRub] = useState("");
   const [gptInput, setGptInput] = useState("");
   const [gptOutput, setGptOutput] = useState("");
   const [dsInput, setDsInput] = useState("");
   const [dsOutput, setDsOutput] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
 
   useEffect(() => {
     if (!config) return;
-    setMarkup(String(config.markupMultiplier));
-    setUsdToRub(String(config.usdToRub));
+    setOpenaiMarkup(String(config.openaiMarkupMultiplier));
+    setOpenaiUsdToRub(String(config.openaiUsdToRub));
+    setDeepseekMarkup(String(config.deepseekMarkupMultiplier));
+    setDeepseekUsdToRub(String(config.deepseekUsdToRub));
     setGptInput(String(config.gpt52InputPrice));
     setGptOutput(String(config.gpt52OutputPrice));
     setDsInput(String(config.deepseekInputPrice));
@@ -78,8 +100,10 @@ export default function BillingSettingsPage() {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          markupMultiplier: parseFloat(markup),
-          usdToRub: parseFloat(usdToRub),
+          openaiMarkupMultiplier: parseFloat(openaiMarkup),
+          openaiUsdToRub: parseFloat(openaiUsdToRub),
+          deepseekMarkupMultiplier: parseFloat(deepseekMarkup),
+          deepseekUsdToRub: parseFloat(deepseekUsdToRub),
           gpt52InputPrice: parseFloat(gptInput),
           gpt52OutputPrice: parseFloat(gptOutput),
           deepseekInputPrice: parseFloat(dsInput),
@@ -98,7 +122,7 @@ export default function BillingSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [markup, usdToRub, gptInput, gptOutput, dsInput, dsOutput, mutate]);
+  }, [openaiMarkup, openaiUsdToRub, deepseekMarkup, deepseekUsdToRub, gptInput, gptOutput, dsInput, dsOutput, mutate]);
 
   if (!isAdmin && meData) {
     return (
@@ -117,8 +141,10 @@ export default function BillingSettingsPage() {
   }
 
   // Расчёт средней стоимости сообщения по текущим настройкам
-  const markupVal = parseFloat(markup) || 2.5;
-  const usdVal = parseFloat(usdToRub) || 90;
+  const openaiMarkupVal = parseFloat(openaiMarkup) || 2.5;
+  const openaiUsdVal = parseFloat(openaiUsdToRub) || 90;
+  const deepseekMarkupVal = parseFloat(deepseekMarkup) || 2.5;
+  const deepseekUsdVal = parseFloat(deepseekUsdToRub) || 90;
   const gptInputVal = parseFloat(gptInput) || 15;
   const gptOutputVal = parseFloat(gptOutput) || 60;
   const dsInputVal = parseFloat(dsInput) || 0.27;
@@ -126,17 +152,17 @@ export default function BillingSettingsPage() {
 
   // Средняя стоимость для типичного сообщения: 500 input + 200 output токенов
   const avgIn = 500, avgOut = 200;
-  const gptCost = (avgIn * gptInputVal / 1_000_000 + avgOut * gptOutputVal / 1_000_000) * usdVal;
-  const gptCharged = gptCost * markupVal;
-  const dsCost = (avgIn * dsInputVal / 1_000_000 + avgOut * dsOutputVal / 1_000_000) * usdVal;
-  const dsCharged = dsCost * markupVal;
+  const gptCost = (avgIn * gptInputVal / 1_000_000 + avgOut * gptOutputVal / 1_000_000) * openaiUsdVal;
+  const gptCharged = gptCost * openaiMarkupVal;
+  const dsCost = (avgIn * dsInputVal / 1_000_000 + avgOut * dsOutputVal / 1_000_000) * deepseekUsdVal;
+  const dsCharged = dsCost * deepseekMarkupVal;
 
   const modelStatsMap = Object.fromEntries((config?.modelStats ?? []).map((s) => [s.model, s]));
 
   return (
     <div className="min-h-screen">
       <div className="min-h-screen p-0 sm:p-2 lg:p-5 flex flex-col">
-        <div className="mx-auto w-full max-w-4xl flex-1 flex flex-col bg-white rounded-none sm:rounded-2xl lg:rounded-[30px] shadow-none sm:shadow-2xl overflow-hidden">
+        <div className="mx-auto w-full max-w-7xl flex-1 flex flex-col bg-white rounded-none sm:rounded-2xl lg:rounded-[30px] shadow-none sm:shadow-2xl overflow-hidden">
 
           {/* Header */}
           <header className="border-b border-zinc-100 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4 flex items-center justify-between shrink-0 gap-2">
@@ -171,6 +197,22 @@ export default function BillingSettingsPage() {
               >
                 Чаты
               </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowAdminMenu((v) => !v)}
+                  className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-violet-600 text-white hover:bg-violet-700 transition font-geist whitespace-nowrap"
+                >
+                  Админка
+                </button>
+                {showAdminMenu && (
+                  <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-zinc-200 rounded-2xl shadow-lg py-1 min-w-[180px]">
+                    <a href="/ai-assistant" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>AI Ассистент</a>
+                    <a href="/admin/billing/overview" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Биллинг — Обзор</a>
+                    <a href="/admin/billing/users" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Биллинг — Пользователи</a>
+                    <a href="/admin/billing/settings" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Биллинг — Настройки</a>
+                  </div>
+                )}
+              </div>
             </div>
           </header>
 
@@ -184,9 +226,10 @@ export default function BillingSettingsPage() {
                 </p>
               </div>
 
-              {/* Наценка и курс */}
+              {/* Наценка и курс OpenAI */}
               <section className="rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
-                <h2 className="text-lg font-semibold text-zinc-900 mb-4 font-geist">Наценка и курс</h2>
+                <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">Наценка и курс — OpenAI</h2>
+                <p className="text-xs text-zinc-500 mb-4">Применяется ко всем моделям OpenAI (GPT-4, GPT-5 и др.)</p>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-zinc-700 mb-1">
@@ -200,12 +243,12 @@ export default function BillingSettingsPage() {
                         type="number"
                         step="0.1"
                         min="1"
-                        value={markup}
-                        onChange={(e) => setMarkup(e.target.value)}
+                        value={openaiMarkup}
+                        onChange={(e) => setOpenaiMarkup(e.target.value)}
                         className="w-32 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-zinc-900"
                       />
                       <span className="text-sm text-zinc-500">
-                        = наценка {markupVal > 0 ? ((markupVal - 1) * 100).toFixed(0) : "—"}%
+                        = наценка {openaiMarkupVal > 0 ? ((openaiMarkupVal - 1) * 100).toFixed(0) : "—"}%
                       </span>
                     </div>
                   </div>
@@ -218,8 +261,8 @@ export default function BillingSettingsPage() {
                         type="number"
                         step="0.01"
                         min="1"
-                        value={usdToRub}
-                        onChange={(e) => setUsdToRub(e.target.value)}
+                        value={openaiUsdToRub}
+                        onChange={(e) => setOpenaiUsdToRub(e.target.value)}
                         className="w-32 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-zinc-900"
                       />
                       <span className="text-sm text-zinc-500">₽ за $1</span>
@@ -228,10 +271,55 @@ export default function BillingSettingsPage() {
                 </div>
               </section>
 
-              {/* Цены провайдеров */}
+              {/* Наценка и курс DeepSeek */}
+              <section className="rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+                <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">Наценка и курс — DeepSeek</h2>
+                <p className="text-xs text-zinc-500 mb-4">Применяется ко всем моделям DeepSeek</p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 mb-1">
+                      Множитель наценки
+                      <span className="ml-2 text-xs text-zinc-500 font-normal">
+                        (например 2.5 = себестоимость × 2.5, наценка +150%)
+                      </span>
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="1"
+                        value={deepseekMarkup}
+                        onChange={(e) => setDeepseekMarkup(e.target.value)}
+                        className="w-32 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                      />
+                      <span className="text-sm text-zinc-500">
+                        = наценка {deepseekMarkupVal > 0 ? ((deepseekMarkupVal - 1) * 100).toFixed(0) : "—"}%
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 mb-1">
+                      Курс USD / RUB
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="1"
+                        value={deepseekUsdToRub}
+                        onChange={(e) => setDeepseekUsdToRub(e.target.value)}
+                        className="w-32 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                      />
+                      <span className="text-sm text-zinc-500">₽ за $1</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Цены провайдеров — ручная настройка */}
               <section className="rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
                 <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">Цены провайдеров</h2>
-                <p className="text-xs text-zinc-500 mb-4">USD за 1 млн токенов</p>
+                <p className="text-xs text-zinc-500 mb-4">Актуальные ценники за 1 млн токенов для расчёта себестоимости</p>
 
                 <div className="space-y-5">
                   {/* GPT-5.2 */}
@@ -305,6 +393,51 @@ export default function BillingSettingsPage() {
                       </div>
                     </div>
                   </div>
+                </div>
+              </section>
+
+              {/* Справочные цены провайдеров — автоматически */}
+              <section className="rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+                <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">Текущие ценники провайдеров</h2>
+                <p className="text-xs text-zinc-500 mb-4">
+                  Справочные цены за 1 млн токенов по всем моделям (USD). Используйте для заполнения цен выше.
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-zinc-500 border-b border-zinc-300/60">
+                        <th className="pb-2 font-medium pr-4">Модель</th>
+                        <th className="pb-2 font-medium pr-4">Input / 1M токенов</th>
+                        <th className="pb-2 font-medium">Output / 1M токенов</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-zinc-700">
+                      <tr className="border-b border-zinc-300/20">
+                        <td colSpan={3} className="py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wide">OpenAI</td>
+                      </tr>
+                      {Object.entries(PROVIDER_REFERENCE_PRICES)
+                        .filter(([k]) => !k.startsWith("deepseek"))
+                        .map(([model, prices]) => (
+                          <tr key={model} className="border-b border-zinc-300/40 hover:bg-zinc-100/50">
+                            <td className="py-2 pr-4 font-medium">{prices.label}</td>
+                            <td className="py-2 pr-4 font-mono text-sky-700">${prices.input.toFixed(2)}</td>
+                            <td className="py-2 font-mono text-sky-700">${prices.output.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      <tr className="border-b border-zinc-300/20">
+                        <td colSpan={3} className="py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wide">DeepSeek</td>
+                      </tr>
+                      {Object.entries(PROVIDER_REFERENCE_PRICES)
+                        .filter(([k]) => k.startsWith("deepseek"))
+                        .map(([model, prices]) => (
+                          <tr key={model} className="border-b border-zinc-300/40 hover:bg-zinc-100/50">
+                            <td className="py-2 pr-4 font-medium">{prices.label}</td>
+                            <td className="py-2 pr-4 font-mono text-emerald-700">${prices.input.toFixed(2)}</td>
+                            <td className="py-2 font-mono text-emerald-700">${prices.output.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
                 </div>
               </section>
 

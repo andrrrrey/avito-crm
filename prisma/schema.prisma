@@ -192,13 +192,18 @@ model KnowledgeBaseChunk {
 model BillingConfig {
   id Int @id @default(1)
 
-  // Множитель наценки: 2.5 = стоимость × 2.5 (т.е. наценка 150%)
-  markupMultiplier    Decimal @db.Decimal(6, 3) @default(2.5)
+  // Множитель наценки для OpenAI: 2.5 = стоимость × 2.5 (т.е. наценка 150%)
+  openaiMarkupMultiplier    Decimal @db.Decimal(6, 3) @default(2.5)
+  // Курс USD → RUB для OpenAI (обновляется вручную через админку)
+  openaiUsdToRub            Decimal @db.Decimal(8, 4) @default(90)
 
-  // Курс USD → RUB (обновляется вручную через админку)
-  usdToRub            Decimal @db.Decimal(8, 4) @default(90)
+  // Множитель наценки для DeepSeek
+  deepseekMarkupMultiplier  Decimal @db.Decimal(6, 3) @default(2.5)
+  // Курс USD → RUB для DeepSeek
+  deepseekUsdToRub          Decimal @db.Decimal(8, 4) @default(90)
 
-  // Цены OpenAI GPT-5.2 (USD за 1 млн токенов)
+  // Цены OpenAI — за 1 млн токенов (USD)
+  // Настраиваемые вручную (справочные рыночные цены обновляются автоматически в UI)
   gpt52InputPrice     Decimal @db.Decimal(10, 4) @default(15)
   gpt52OutputPrice    Decimal @db.Decimal(10, 4) @default(60)
 
