@@ -24,6 +24,7 @@ export async function GET(req: Request) {
       avitoClientId: true,
       avitoClientSecret: true,
       avitoAccountId: true,
+      aiEnabled: true,
       aiInstructions: true,
       aiEscalatePrompt: true,
       followupEnabled: true,
@@ -42,6 +43,7 @@ export async function GET(req: Request) {
       avitoClientId: user.avitoClientId ?? "",
       hasAvitoClientSecret: !!user.avitoClientSecret,
       avitoAccountId: user.avitoAccountId ?? null,
+      aiEnabled: user.aiEnabled,
       aiInstructions: user.aiInstructions ?? "",
       aiEscalatePrompt: user.aiEscalatePrompt ?? "",
       followupEnabled: user.followupEnabled,
@@ -66,6 +68,7 @@ export async function PUT(req: Request) {
     avitoClientId,
     avitoClientSecret,
     avitoAccountId,
+    aiEnabled,
     aiInstructions,
     aiEscalatePrompt,
     followupEnabled,
@@ -83,6 +86,7 @@ export async function PUT(req: Request) {
       if (Number.isInteger(n) && n > 0) data.avitoAccountId = n;
     }
   }
+  if (typeof aiEnabled === "boolean") data.aiEnabled = aiEnabled;
   if (typeof aiInstructions === "string") data.aiInstructions = aiInstructions || null;
   if (typeof aiEscalatePrompt === "string") data.aiEscalatePrompt = aiEscalatePrompt || null;
   if (typeof followupEnabled === "boolean") data.followupEnabled = followupEnabled;
@@ -102,6 +106,7 @@ export async function PUT(req: Request) {
       avitoClientId: true,
       avitoClientSecret: true,
       avitoAccountId: true,
+      aiEnabled: true,
       aiInstructions: true,
       aiEscalatePrompt: true,
       followupEnabled: true,
@@ -118,6 +123,7 @@ export async function PUT(req: Request) {
       avitoClientId: user.avitoClientId ?? "",
       hasAvitoClientSecret: !!user.avitoClientSecret,
       avitoAccountId: user.avitoAccountId ?? null,
+      aiEnabled: user.aiEnabled,
       aiInstructions: user.aiInstructions ?? "",
       aiEscalatePrompt: user.aiEscalatePrompt ?? "",
       followupEnabled: user.followupEnabled,

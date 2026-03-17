@@ -1,7 +1,7 @@
 // src/app/ai-assistant/page.tsx
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 
@@ -24,22 +24,6 @@ function cn(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
 
-function formatBytes(bytes: number | undefined) {
-  if (!bytes) return "—";
-  if (bytes < 1024) return bytes + " B";
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-}
-
-function formatDate(ts: number) {
-  return new Date(ts * 1000).toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function IconSparkles({ className }: { className?: string }) {
   return (
@@ -58,19 +42,7 @@ type AiSettings = {
   hasApiKey: boolean;
   deepseekApiKey: string | null;
   hasDeepseekApiKey: boolean;
-  vectorStoreId: string;
-  instructions: string;
-  escalatePrompt: string;
   model: string;
-};
-
-type KbFile = {
-  id: string;
-  filename: string;
-  fileSize: number;
-  mimeType: string;
-  chunksCount: number;
-  created_at: number;
 };
 
 /* ─── page ──────────────────────────────────────────────────── */
@@ -115,9 +87,6 @@ export default function AiAssistantPage() {
   const [apiKeyTouched, setApiKeyTouched] = useState(false);
   const [deepseekApiKey, setDeepseekApiKey] = useState("");
   const [deepseekApiKeyTouched, setDeepseekApiKeyTouched] = useState(false);
-  const [vectorStoreId, setVectorStoreId] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [escalatePrompt, setEscalatePrompt] = useState("");
   const [model, setModel] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -128,32 +97,12 @@ export default function AiAssistantPage() {
     if (!settings) return;
     setEnabled(settings.enabled);
     setProvider((settings.provider as "openai" | "deepseek") ?? "openai");
-    setVectorStoreId(settings.vectorStoreId);
-    setInstructions(settings.instructions);
-    setEscalatePrompt(settings.escalatePrompt);
     setModel(settings.model);
     setApiKey("");
     setApiKeyTouched(false);
     setDeepseekApiKey("");
     setDeepseekApiKeyTouched(false);
   }, [settings]);
-
-  // Files — для DeepSeek (локальная база знаний)
-  const hasDeepseekKb = !!(provider === "deepseek" && settings?.hasDeepseekApiKey);
-  const {
-    data: kbFilesData,
-    mutate: mutateKbFiles,
-    isLoading: kbFilesLoading,
-  } = useSWR<{ ok: boolean; files: KbFile[] }>(
-    hasDeepseekKb ? "/api/ai-assistant/deepseek-files" : null,
-    fetcher,
-  );
-  const kbFiles = kbFilesData?.ok ? kbFilesData.files : [];
-
-  const [kbUploading, setKbUploading] = useState(false);
-  const [kbDeletingId, setKbDeletingId] = useState<string | null>(null);
-  const [kbFileError, setKbFileError] = useState<string | null>(null);
-  const kbFileInputRef = useRef<HTMLInputElement>(null);
 
   const activeModels = provider === "deepseek" ? DEEPSEEK_MODELS : OPENAI_MODELS;
 
@@ -166,9 +115,6 @@ export default function AiAssistantPage() {
       const payload: Record<string, unknown> = {
         enabled,
         provider,
-        vectorStoreId,
-        instructions,
-        escalatePrompt,
         model,
       };
       if (apiKeyTouched && apiKey) {
@@ -198,62 +144,8 @@ export default function AiAssistantPage() {
   }, [
     enabled, provider, apiKey, apiKeyTouched,
     deepseekApiKey, deepseekApiKeyTouched,
-    vectorStoreId, instructions, escalatePrompt, model, mutateSettings,
+    model, mutateSettings,
   ]);
-
-  const handleKbUpload = useCallback(async () => {
-    const file = kbFileInputRef.current?.files?.[0];
-    if (!file) return;
-
-    setKbUploading(true);
-    setKbFileError(null);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-
-      const r = await apiFetch("/api/ai-assistant/deepseek-files", {
-        method: "POST",
-        body: fd,
-      });
-      const j = await r.json();
-      if (j.ok) {
-        mutateKbFiles();
-        if (kbFileInputRef.current) kbFileInputRef.current.value = "";
-      } else {
-        setKbFileError(j.error || "Ошибка загрузки");
-      }
-    } catch {
-      setKbFileError("Ошибка сети");
-    } finally {
-      setKbUploading(false);
-    }
-  }, [mutateKbFiles]);
-
-  const handleKbDelete = useCallback(
-    async (fileId: string) => {
-      if (!confirm("Удалить файл из базы знаний?")) return;
-      setKbDeletingId(fileId);
-      setKbFileError(null);
-      try {
-        const r = await apiFetch("/api/ai-assistant/deepseek-files", {
-          method: "DELETE",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ fileId }),
-        });
-        const j = await r.json();
-        if (j.ok) {
-          mutateKbFiles();
-        } else {
-          setKbFileError(j.error || "Ошибка удаления");
-        }
-      } catch {
-        setKbFileError("Ошибка сети");
-      } finally {
-        setKbDeletingId(null);
-      }
-    },
-    [mutateKbFiles],
-  );
 
   /* ─── render ────────────────────────────────────────────── */
 
@@ -513,25 +405,6 @@ export default function AiAssistantPage() {
                   </span>
                 </label>
 
-                {/* Vector Store ID — только для OpenAI */}
-                {provider === "openai" && (
-                  <label className="mt-4 block">
-                    <span className="text-sm font-medium text-zinc-700">
-                      Vector Store ID
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="vs_..."
-                      value={vectorStoreId}
-                      onChange={(e) => setVectorStoreId(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25"
-                    />
-                    <span className="text-xs text-zinc-400">
-                      ID векторного хранилища OpenAI для поиска по базе знаний
-                    </span>
-                  </label>
-                )}
-
                 {/* Save */}
                 <div className="mt-5 flex items-center gap-3">
                   <button
@@ -556,110 +429,7 @@ export default function AiAssistantPage() {
                 </div>
               </section>
 
-              {/* ── База знаний DeepSeek ── */}
-              {provider === "deepseek" && (
-                <section className="mt-6 mb-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
-                  <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">
-                    База знаний
-                  </h2>
-                  <p className="text-sm text-zinc-500 mb-4">
-                    Загрузите файлы с информацией о товарах, услугах или FAQ.
-                    При ответе ИИ автоматически найдёт и использует релевантные данные.
-                    Поддерживаемые форматы: .txt, .md, .csv, .json, .yaml, .html
-                  </p>
-
-                  {!hasDeepseekKb ? (
-                    <p className="text-sm text-zinc-500">
-                      Сохраните DeepSeek API-ключ выше, чтобы управлять базой знаний.
-                    </p>
-                  ) : (
-                    <>
-                      {/* Upload */}
-                      <div className="flex flex-wrap items-center gap-3 mb-4">
-                        <input
-                          ref={kbFileInputRef}
-                          type="file"
-                          accept=".txt,.md,.csv,.json,.yaml,.yml,.html,.htm"
-                          className="text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
-                        />
-                        <button
-                          onClick={handleKbUpload}
-                          disabled={kbUploading}
-                          className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
-                        >
-                          {kbUploading ? "Загрузка..." : "Загрузить"}
-                        </button>
-                      </div>
-
-                      {kbFileError && (
-                        <div className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-700/10">
-                          {kbFileError}
-                        </div>
-                      )}
-
-                      {/* File list */}
-                      {kbFilesLoading ? (
-                        <div className="text-sm text-zinc-400 font-geist">Загрузка списка файлов...</div>
-                      ) : kbFiles.length === 0 ? (
-                        <div className="text-sm text-zinc-400 font-geist">
-                          База знаний пуста. Загрузите файлы выше.
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm text-left">
-                            <thead>
-                              <tr className="border-b border-zinc-100 text-zinc-500">
-                                <th className="py-2 pr-4 font-medium">Имя файла</th>
-                                <th className="py-2 pr-4 font-medium">Размер</th>
-                                <th className="py-2 pr-4 font-medium">Чанков</th>
-                                <th className="py-2 pr-4 font-medium">Дата</th>
-                                <th className="py-2 font-medium"></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {kbFiles.map((f) => (
-                                <tr
-                                  key={f.id}
-                                  className="border-b border-zinc-200/70 hover:bg-zinc-200/50"
-                                >
-                                  <td className="py-2 pr-4 text-zinc-700">
-                                    {f.filename}
-                                  </td>
-                                  <td className="py-2 pr-4 text-zinc-500">
-                                    {formatBytes(f.fileSize)}
-                                  </td>
-                                  <td className="py-2 pr-4 text-zinc-500">
-                                    <span className="inline-block rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
-                                      {f.chunksCount}
-                                    </span>
-                                  </td>
-                                  <td className="py-2 pr-4 text-zinc-500">
-                                    {formatDate(f.created_at)}
-                                  </td>
-                                  <td className="py-2">
-                                    <button
-                                      onClick={() => handleKbDelete(f.id)}
-                                      disabled={kbDeletingId === f.id}
-                                      className="rounded-lg px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors"
-                                    >
-                                      {kbDeletingId === f.id ? "..." : "Удалить"}
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </section>
-              )}
-
-              {/* bottom spacing for last section when no DeepSeek/OpenAI */}
-              {provider === "openai" && (
-                <div className="mb-6" />
-              )}
+              <div className="mb-6" />
 
             </div>
           </div>

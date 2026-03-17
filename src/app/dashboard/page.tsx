@@ -51,6 +51,7 @@ type UserSettings = {
   avitoClientId: string;
   hasAvitoClientSecret: boolean;
   avitoAccountId: number | null;
+  aiEnabled: boolean;
   aiInstructions: string;
   aiEscalatePrompt: string;
   followupEnabled: boolean;
@@ -62,24 +63,6 @@ type KbFile = {
   fileSize: number;
   mimeType: string;
   chunksCount: number;
-  created_at: number;
-};
-
-type AiSettings = {
-  enabled: boolean;
-  provider: string;
-  hasApiKey: boolean;
-  hasDeepseekApiKey: boolean;
-  vectorStoreId: string;
-  instructions: string;
-  escalatePrompt: string;
-};
-
-type VsFile = {
-  id: string;
-  filename?: string;
-  bytes?: number;
-  status: string;
   created_at: number;
 };
 
@@ -96,13 +79,7 @@ export default function DashboardPage() {
     mutate: mutateSettings,
   } = useSWR<{ ok: boolean; data: UserSettings }>("/api/user/settings", fetcher);
 
-  const {
-    data: aiData,
-    mutate: mutateAiSettings,
-  } = useSWR<{ ok: boolean; data: AiSettings }>("/api/ai-assistant", fetcher);
-
   const settings = settingsData?.data;
-  const aiSettings = aiData?.data;
   const isAdmin = meData?.user?.role === "ADMIN";
 
   // Form state
@@ -110,6 +87,7 @@ export default function DashboardPage() {
   const [avitoClientSecret, setAvitoClientSecret] = useState("");
   const [avitoClientSecretTouched, setAvitoClientSecretTouched] = useState(false);
   const [avitoAccountId, setAvitoAccountId] = useState("");
+  const [aiEnabled, setAiEnabled] = useState(true);
   const [aiInstructions, setAiInstructions] = useState("");
   const [aiEscalatePrompt, setAiEscalatePrompt] = useState("");
   const [followupEnabled, setFollowupEnabled] = useState(true);
@@ -119,51 +97,18 @@ export default function DashboardPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
-  // Admin-only: global AI instructions
-  const [adminInstructions, setAdminInstructions] = useState("");
-  const [adminEscalatePrompt, setAdminEscalatePrompt] = useState("");
-  const [adminSaving, setAdminSaving] = useState(false);
-  const [adminSaveMsg, setAdminSaveMsg] = useState<string | null>(null);
-
-  // Admin-only: Vector Store files state
-  const [vsUploading, setVsUploading] = useState(false);
-  const [vsDeletingId, setVsDeletingId] = useState<string | null>(null);
-  const [vsFileError, setVsFileError] = useState<string | null>(null);
-  const vsFileInputRef = useRef<HTMLInputElement>(null);
-
-  // Admin-only: Vector Store files SWR (must be before callbacks that use mutateVsFiles)
-  const hasVectorStore = !!(
-    isAdmin &&
-    aiSettings?.provider === "openai" &&
-    aiSettings?.hasApiKey &&
-    aiSettings?.vectorStoreId
-  );
-  const {
-    data: vsFilesData,
-    mutate: mutateVsFiles,
-    isLoading: vsFilesLoading,
-  } = useSWR<{ ok: boolean; files: VsFile[] }>(
-    hasVectorStore ? "/api/ai-assistant/files" : null,
-    fetcher,
-  );
-  const vsFiles = vsFilesData?.ok ? vsFilesData.files : [];
 
   useEffect(() => {
     if (!settings) return;
     setAvitoClientId(settings.avitoClientId ?? "");
     setAvitoAccountId(settings.avitoAccountId ? String(settings.avitoAccountId) : "");
+    setAiEnabled(settings.aiEnabled ?? true);
     setAiInstructions(settings.aiInstructions ?? "");
     setAiEscalatePrompt(settings.aiEscalatePrompt ?? "");
     setFollowupEnabled(settings.followupEnabled ?? true);
     setAvitoClientSecret("");
     setAvitoClientSecretTouched(false);
   }, [settings]);
-
-  useEffect(() => {
-    if (!aiSettings) return;
-    setAdminInstructions(aiSettings.instructions ?? "");
-    setAdminEscalatePrompt(aiSettings.escalatePrompt ?? "");
-  }, [aiSettings]);
 
   const saveSettings = useCallback(async () => {
     setSaving(true);
@@ -172,6 +117,7 @@ export default function DashboardPage() {
       const payload: Record<string, unknown> = {
         avitoClientId,
         avitoAccountId: avitoAccountId ? Number(avitoAccountId) : null,
+        aiEnabled,
         aiInstructions,
         aiEscalatePrompt,
         followupEnabled,
@@ -199,7 +145,7 @@ export default function DashboardPage() {
     }
   }, [
     avitoClientId, avitoClientSecret, avitoClientSecretTouched,
-    avitoAccountId, aiInstructions, aiEscalatePrompt, followupEnabled, mutateSettings,
+    avitoAccountId, aiEnabled, aiInstructions, aiEscalatePrompt, followupEnabled, mutateSettings,
   ]);
 
   const syncChats = useCallback(async () => {
@@ -221,77 +167,7 @@ export default function DashboardPage() {
     }
   }, []);
 
-  const saveAdminSettings = useCallback(async () => {
-    setAdminSaving(true);
-    setAdminSaveMsg(null);
-    try {
-      const r = await apiFetch("/api/ai-assistant", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ instructions: adminInstructions, escalatePrompt: adminEscalatePrompt }),
-      });
-      const j = await r.json();
-      if (j.ok) {
-        setAdminSaveMsg("Сохранено");
-        mutateAiSettings();
-      } else {
-        setAdminSaveMsg("Ошибка: " + (j.error || "неизвестная"));
-      }
-    } catch {
-      setAdminSaveMsg("Ошибка сети");
-    } finally {
-      setAdminSaving(false);
-    }
-  }, [adminInstructions, adminEscalatePrompt, mutateAiSettings]);
-
-  const handleVsUpload = useCallback(async () => {
-    const file = vsFileInputRef.current?.files?.[0];
-    if (!file) return;
-    setVsUploading(true);
-    setVsFileError(null);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const r = await apiFetch("/api/ai-assistant/files", { method: "POST", body: fd });
-      const j = await r.json();
-      if (j.ok) {
-        mutateVsFiles();
-        if (vsFileInputRef.current) vsFileInputRef.current.value = "";
-      } else {
-        setVsFileError(j.error || "Ошибка загрузки");
-      }
-    } catch {
-      setVsFileError("Ошибка сети");
-    } finally {
-      setVsUploading(false);
-    }
-  }, [mutateVsFiles]);
-
-  const handleVsDelete = useCallback(async (fileId: string) => {
-    if (!confirm("Удалить файл из Vector Store?")) return;
-    setVsDeletingId(fileId);
-    setVsFileError(null);
-    try {
-      const r = await apiFetch("/api/ai-assistant/files", {
-        method: "DELETE",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ fileId }),
-      });
-      const j = await r.json();
-      if (j.ok) {
-        mutateVsFiles();
-      } else {
-        setVsFileError(j.error || "Ошибка удаления");
-      }
-    } catch {
-      setVsFileError("Ошибка сети");
-    } finally {
-      setVsDeletingId(null);
-    }
-  }, [mutateVsFiles]);
-
   // Knowledge base
-  const hasDeepseek = aiSettings?.provider === "deepseek" && aiSettings?.hasDeepseekApiKey;
   const {
     data: kbFilesData,
     mutate: mutateKbFiles,
@@ -533,10 +409,43 @@ export default function DashboardPage() {
                 </div>
               </section>
 
-              {/* ── Инструкция для ИИ ── */}
-              {!isAdmin && <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
-                <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">Инструкция для ИИ-ассистента</h2>
+              {/* ── ИИ-ассистент (вкл/выкл + инструкции) ── */}
+              <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+                <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">ИИ-ассистент</h2>
                 <p className="text-sm text-zinc-500 mb-4">
+                  Управление ИИ-ассистентом для ваших чатов.
+                </p>
+
+                {/* Переключатель вкл/выкл ИИ */}
+                <div className="flex items-center justify-between py-3 border-b border-zinc-200 mb-4">
+                  <div>
+                    <div className="text-sm font-medium text-zinc-700">ИИ-ассистент включён</div>
+                    <div className="text-xs text-zinc-500">
+                      Когда выключено, ИИ не будет отвечать ни в одном из ваших чатов
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={aiEnabled}
+                    onClick={() => setAiEnabled((v) => !v)}
+                    className={[
+                      "relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200",
+                      aiEnabled ? "bg-sky-600" : "bg-zinc-300",
+                    ].join(" ")}
+                  >
+                    <span
+                      className={[
+                        "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200",
+                        aiEnabled ? "translate-x-5" : "translate-x-0",
+                      ].join(" ")}
+                    />
+                  </button>
+                </div>
+
+                {/* Персональные инструкции для ИИ */}
+                <h3 className="text-sm font-semibold text-zinc-700 mb-1 font-geist">Инструкция для ИИ-ассистента</h3>
+                <p className="text-sm text-zinc-500 mb-3">
                   Персональная инструкция для ИИ при обработке ваших чатов. Если не задана — используется
                   глобальная инструкция администратора.
                 </p>
@@ -579,7 +488,7 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </div>
-              </section>}
+              </section>
 
               {/* ── Дожим бота ── */}
               <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
@@ -628,161 +537,12 @@ export default function DashboardPage() {
                 </div>
               </section>
 
-              {/* ── Инструкция для ассистента (только для admin) ── */}
-              {isAdmin && (
-                <section className={`mt-6 ${aiSettings?.provider !== "openai" ? "mb-6" : ""} rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10`}>
-                  <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">
-                    Инструкция для ассистента
-                  </h2>
-                  <p className="text-sm text-zinc-500 mb-4">
-                    Глобальная инструкция для ИИ-ассистента. Применяется ко всем пользователям, если у них не задана персональная инструкция.
-                  </p>
-
-                  <textarea
-                    rows={6}
-                    placeholder="Вы — вежливый помощник по продажам на Avito..."
-                    value={adminInstructions}
-                    onChange={(e) => setAdminInstructions(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25 resize-y"
-                  />
-
-                  <div className="mt-3">
-                    <h3 className="text-sm font-medium text-zinc-700 mb-1">
-                      Промпт переключения на менеджера
-                    </h3>
-                    <p className="text-xs text-zinc-500 mb-2">
-                      Инструкция для ИИ, описывающая когда и как переводить диалог на менеджера.
-                      Если оставить пустым — будет использоваться промпт по умолчанию.
-                    </p>
-                    <textarea
-                      rows={12}
-                      placeholder={`## Перевод на менеджера\n\nТы ОБЯЗАН добавить маркер [ESCALATE] и перевести на менеджера, если:\n- Клиент просит позвать человека...\n- ...`}
-                      value={adminEscalatePrompt}
-                      onChange={(e) => setAdminEscalatePrompt(e.target.value)}
-                      className="w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25 resize-y font-mono leading-relaxed"
-                    />
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <button
-                      onClick={saveAdminSettings}
-                      disabled={adminSaving}
-                      className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
-                    >
-                      {adminSaving ? "Сохранение..." : "Сохранить"}
-                    </button>
-                    {adminEscalatePrompt && (
-                      <button
-                        onClick={() => setAdminEscalatePrompt("")}
-                        className="rounded-xl bg-zinc-200/80 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-900/10 hover:bg-zinc-200/90 transition-colors"
-                      >
-                        Сбросить промпт на по умолчанию
-                      </button>
-                    )}
-                    {adminSaveMsg && (
-                      <span className={adminSaveMsg === "Сохранено" ? "text-sm text-emerald-600" : "text-sm text-rose-600"}>
-                        {adminSaveMsg}
-                      </span>
-                    )}
-                  </div>
-                </section>
-              )}
-
-              {/* ── Файлы Vector Store (только для admin) ── */}
-              {isAdmin && aiSettings?.provider === "openai" && (
-                <section className="mt-6 mb-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
-                  <h2 className="text-lg font-semibold text-zinc-900 mb-4 font-geist">
-                    Файлы Vector Store
-                  </h2>
-
-                  {!hasVectorStore ? (
-                    <p className="text-sm text-zinc-500">
-                      Укажите OpenAI API-ключ и Vector Store ID в настройках AI Ассистента, чтобы управлять файлами.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="flex flex-wrap items-center gap-3 mb-4">
-                        <input
-                          ref={vsFileInputRef}
-                          type="file"
-                          className="text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
-                        />
-                        <button
-                          onClick={handleVsUpload}
-                          disabled={vsUploading}
-                          className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
-                        >
-                          {vsUploading ? "Загрузка..." : "Загрузить"}
-                        </button>
-                      </div>
-
-                      {vsFileError && (
-                        <div className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-700/10">
-                          {vsFileError}
-                        </div>
-                      )}
-
-                      {vsFilesLoading ? (
-                        <div className="text-sm text-zinc-400 font-geist">Загрузка списка файлов...</div>
-                      ) : vsFiles.length === 0 ? (
-                        <div className="text-sm text-zinc-400 font-geist">Нет файлов в Vector Store</div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm text-left">
-                            <thead>
-                              <tr className="border-b border-zinc-100 text-zinc-500">
-                                <th className="py-2 pr-4 font-medium">Имя файла</th>
-                                <th className="py-2 pr-4 font-medium">Размер</th>
-                                <th className="py-2 pr-4 font-medium">Статус</th>
-                                <th className="py-2 pr-4 font-medium">Дата</th>
-                                <th className="py-2 font-medium"></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {vsFiles.map((f) => (
-                                <tr key={f.id} className="border-b border-zinc-200/70 hover:bg-zinc-200/50">
-                                  <td className="py-2 pr-4 text-zinc-700">{f.filename || f.id}</td>
-                                  <td className="py-2 pr-4 text-zinc-500">{formatBytes(f.bytes)}</td>
-                                  <td className="py-2 pr-4">
-                                    <span className={[
-                                      "inline-block rounded-full px-2 py-0.5 text-xs font-medium",
-                                      f.status === "completed" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700",
-                                    ].join(" ")}>
-                                      {f.status}
-                                    </span>
-                                  </td>
-                                  <td className="py-2 pr-4 text-zinc-500">{formatDate(f.created_at)}</td>
-                                  <td className="py-2">
-                                    <button
-                                      onClick={() => handleVsDelete(f.id)}
-                                      disabled={vsDeletingId === f.id}
-                                      className="rounded-lg px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors"
-                                    >
-                                      {vsDeletingId === f.id ? "..." : "Удалить"}
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </section>
-              )}
-
               {/* ── База знаний ── */}
-              {!isAdmin && <section className="mt-6 mb-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+              <section className="mt-6 mb-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
                 <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">База знаний</h2>
                 <p className="text-sm text-zinc-500 mb-4">
                   Загрузите файлы с информацией о ваших товарах, услугах или FAQ. ИИ будет использовать
                   их при ответах на вопросы в ваших чатах.
-                  {!hasDeepseek && (
-                    <span className="block mt-1 text-amber-600">
-                      База знаний используется при работе с DeepSeek. Для OpenAI используйте Vector Store.
-                    </span>
-                  )}
                 </p>
 
                 {/* Upload */}
@@ -859,7 +619,7 @@ export default function DashboardPage() {
                     </table>
                   </div>
                 )}
-              </section>}
+              </section>
 
             </div>
           </div>
