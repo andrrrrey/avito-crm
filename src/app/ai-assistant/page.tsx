@@ -129,6 +129,7 @@ export default function AiAssistantPage() {
   const [model, setModel] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
 
   // Sync form when settings loaded
   useEffect(() => {
@@ -373,7 +374,7 @@ export default function AiAssistantPage() {
   return (
     <div className="min-h-screen">
       <div className="min-h-screen p-0 sm:p-2 lg:p-5 flex flex-col">
-        <div className="mx-auto w-full max-w-4xl flex-1 flex flex-col bg-white rounded-none sm:rounded-2xl lg:rounded-[30px] shadow-none sm:shadow-2xl overflow-hidden">
+        <div className="mx-auto w-full max-w-7xl flex-1 flex flex-col bg-white rounded-none sm:rounded-2xl lg:rounded-[30px] shadow-none sm:shadow-2xl overflow-hidden">
 
           {/* ── Header ── */}
           <header className="border-b border-zinc-100 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4 flex items-center justify-between shrink-0 gap-2">
@@ -412,6 +413,22 @@ export default function AiAssistantPage() {
               >
                 Чаты
               </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowAdminMenu((v) => !v)}
+                  className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-violet-600 text-white hover:bg-violet-700 transition font-geist whitespace-nowrap"
+                >
+                  Админка
+                </button>
+                {showAdminMenu && (
+                  <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-zinc-200 rounded-2xl shadow-lg py-1 min-w-[180px]">
+                    <a href="/ai-assistant" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>AI Ассистент</a>
+                    <a href="/admin/billing/overview" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Биллинг — Обзор</a>
+                    <a href="/admin/billing/users" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Биллинг — Пользователи</a>
+                    <a href="/admin/billing/settings" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Биллинг — Настройки</a>
+                  </div>
+                )}
+              </div>
             </div>
           </header>
 

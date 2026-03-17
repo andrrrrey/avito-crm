@@ -102,6 +102,7 @@ export default function DashboardPage() {
   const [aiEscalatePrompt, setAiEscalatePrompt] = useState("");
   const [followupEnabled, setFollowupEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -270,7 +271,7 @@ export default function DashboardPage() {
       className="min-h-screen"
     >
       <div className="min-h-screen p-0 sm:p-2 lg:p-5 flex flex-col">
-        <div className="mx-auto w-full max-w-4xl flex-1 flex flex-col bg-white rounded-none sm:rounded-2xl lg:rounded-[30px] shadow-none sm:shadow-2xl overflow-hidden">
+        <div className="mx-auto w-full max-w-7xl flex-1 flex flex-col bg-white rounded-none sm:rounded-2xl lg:rounded-[30px] shadow-none sm:shadow-2xl overflow-hidden">
 
           {/* ── Header ── */}
           <header className="border-b border-zinc-100 px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 md:py-4 flex items-center justify-between shrink-0 gap-2">
@@ -294,15 +295,6 @@ export default function DashboardPage() {
 
             {/* Right: nav */}
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {isAdmin && (
-                <button
-                  onClick={() => router.push("/ai-assistant")}
-                  className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-zinc-950 text-white hover:bg-zinc-800 transition font-geist whitespace-nowrap"
-                >
-                  <span className="hidden sm:inline">AI Ассистент</span>
-                  <span className="sm:hidden">AI</span>
-                </button>
-              )}
               <button
                 onClick={() => router.push("/")}
                 className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-zinc-100 hover:bg-zinc-200 transition font-geist whitespace-nowrap"
@@ -315,6 +307,24 @@ export default function DashboardPage() {
               >
                 Выйти
               </button>
+              {isAdmin && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowAdminMenu((v) => !v)}
+                    className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-violet-600 text-white hover:bg-violet-700 transition font-geist whitespace-nowrap"
+                  >
+                    Админка
+                  </button>
+                  {showAdminMenu && (
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-zinc-200 rounded-2xl shadow-lg py-1 min-w-[180px]">
+                      <a href="/ai-assistant" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>AI Ассистент</a>
+                      <a href="/admin/billing/overview" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Биллинг — Обзор</a>
+                      <a href="/admin/billing/users" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Биллинг — Пользователи</a>
+                      <a href="/admin/billing/settings" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Биллинг — Настройки</a>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </header>
 
@@ -408,7 +418,7 @@ export default function DashboardPage() {
               </section>
 
               {/* ── Инструкция для ИИ ── */}
-              <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+              {!isAdmin && <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
                 <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">Инструкция для ИИ-ассистента</h2>
                 <p className="text-sm text-zinc-500 mb-4">
                   Персональная инструкция для ИИ при обработке ваших чатов. Если не задана — используется
@@ -453,7 +463,7 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </div>
-              </section>
+              </section>}
 
               {/* ── Дожим бота ── */}
               <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
@@ -503,7 +513,7 @@ export default function DashboardPage() {
               </section>
 
               {/* ── База знаний ── */}
-              <section className="mt-6 mb-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+              {!isAdmin && <section className="mt-6 mb-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
                 <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">База знаний</h2>
                 <p className="text-sm text-zinc-500 mb-4">
                   Загрузите файлы с информацией о ваших товарах, услугах или FAQ. ИИ будет использовать
@@ -589,7 +599,7 @@ export default function DashboardPage() {
                     </table>
                   </div>
                 )}
-              </section>
+              </section>}
 
             </div>
           </div>

@@ -7,8 +7,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DEFAULT_CONFIG = {
-  markupMultiplier: 2.5,
-  usdToRub: 90,
+  openaiMarkupMultiplier: 2.5,
+  openaiUsdToRub: 90,
+  deepseekMarkupMultiplier: 2.5,
+  deepseekUsdToRub: 90,
   gpt52InputPrice: 15,
   gpt52OutputPrice: 60,
   deepseekInputPrice: 0.27,
@@ -37,8 +39,10 @@ export async function GET(req: Request) {
   return NextResponse.json({
     ok: true,
     data: {
-      markupMultiplier: Number(config.markupMultiplier),
-      usdToRub: Number(config.usdToRub),
+      openaiMarkupMultiplier: Number(config.openaiMarkupMultiplier),
+      openaiUsdToRub: Number(config.openaiUsdToRub),
+      deepseekMarkupMultiplier: Number(config.deepseekMarkupMultiplier),
+      deepseekUsdToRub: Number(config.deepseekUsdToRub),
       gpt52InputPrice: Number(config.gpt52InputPrice),
       gpt52OutputPrice: Number(config.gpt52OutputPrice),
       deepseekInputPrice: Number(config.deepseekInputPrice),
@@ -67,8 +71,10 @@ export async function PUT(req: Request) {
   const data: Record<string, number> = {};
 
   const numFields = [
-    "markupMultiplier",
-    "usdToRub",
+    "openaiMarkupMultiplier",
+    "openaiUsdToRub",
+    "deepseekMarkupMultiplier",
+    "deepseekUsdToRub",
     "gpt52InputPrice",
     "gpt52OutputPrice",
     "deepseekInputPrice",
@@ -94,8 +100,10 @@ export async function PUT(req: Request) {
   return NextResponse.json({
     ok: true,
     data: {
-      markupMultiplier: Number(config.markupMultiplier),
-      usdToRub: Number(config.usdToRub),
+      openaiMarkupMultiplier: Number(config.openaiMarkupMultiplier),
+      openaiUsdToRub: Number(config.openaiUsdToRub),
+      deepseekMarkupMultiplier: Number(config.deepseekMarkupMultiplier),
+      deepseekUsdToRub: Number(config.deepseekUsdToRub),
       gpt52InputPrice: Number(config.gpt52InputPrice),
       gpt52OutputPrice: Number(config.gpt52OutputPrice),
       deepseekInputPrice: Number(config.deepseekInputPrice),
