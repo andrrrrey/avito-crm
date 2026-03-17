@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { avitoSendTextMessage } from "@/lib/avito";
+import { avitoSendTextMessage, getAvitoCredentialsByAccountId } from "@/lib/avito";
 import { publish } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -29,7 +29,7 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const markRead = body.markRead === undefined ? true : Boolean(body.markRead);
 
-  const chat = await prisma.chat.findUnique({ where: { id } });
+  const chat = await prisma.chat.findUnique({ where: { id }, select: { id: true, avitoChatId: true, accountId: true, status: true, lastMessageAt: true, lastMessageText: true } });
   if (!chat) return jsonError(404, "chat_not_found");
 
   const now = new Date();
@@ -98,10 +98,12 @@ export async function POST(req: Request, ctx: Ctx) {
   // --- REAL AVITO ---
   if (!chat.avitoChatId) return jsonError(409, "chat_not_linked_to_avito");
 
+  const chatCreds = await getAvitoCredentialsByAccountId(chat.accountId);
+
   let avitoResp: any;
   try {
     // ВАЖНО: правильная сигнатура (chatId, text)
-    avitoResp = await avitoSendTextMessage(chat.avitoChatId, text);
+    avitoResp = await avitoSendTextMessage(chat.avitoChatId, text, chatCreds);
   } catch (e: any) {
     return jsonError(502, "avito_send_failed", { message: String(e?.message ?? e) });
   }

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { avitoMarkChatRead } from "@/lib/avito";
+import { avitoMarkChatRead, getAvitoCredentialsByAccountId } from "@/lib/avito";
 import { publish } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -34,7 +34,8 @@ export async function POST(req: Request, ctx: Ctx) {
   // 1) Пытаемся пометить прочитанным в Avito (если не MOCK)
   if (!env.MOCK_MODE && chat.avitoChatId) {
     try {
-      await avitoMarkChatRead(chat.avitoChatId, lastMessageId);
+      const chatCreds = await getAvitoCredentialsByAccountId(chat.accountId);
+      await avitoMarkChatRead(chat.avitoChatId, lastMessageId, chatCreds);
       avitoOk = true;
     } catch (e: any) {
       avitoOk = false;
