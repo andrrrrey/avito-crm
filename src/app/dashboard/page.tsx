@@ -57,6 +57,18 @@ type UserSettings = {
   followupEnabled: boolean;
 };
 
+type BalanceData = {
+  balance: number;
+  transactions: {
+    id: string;
+    type: string;
+    amount: number;
+    balanceAfter: number;
+    description: string | null;
+    createdAt: string;
+  }[];
+};
+
 type KbFile = {
   id: string;
   filename: string;
@@ -79,8 +91,14 @@ export default function DashboardPage() {
     mutate: mutateSettings,
   } = useSWR<{ ok: boolean; data: UserSettings }>("/api/user/settings", fetcher);
 
+  const { data: balanceData } = useSWR<{ ok: boolean; data: BalanceData }>(
+    "/api/billing/balance",
+    fetcher,
+  );
+
   const settings = settingsData?.data;
   const isAdmin = meData?.user?.role === "ADMIN";
+  const balance = balanceData?.data?.balance ?? null;
 
   // Form state
   const [avitoClientId, setAvitoClientId] = useState("");
@@ -310,6 +328,7 @@ export default function DashboardPage() {
                   {showAdminMenu && (
                     <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-zinc-200 rounded-2xl shadow-lg py-1 min-w-[180px]">
                       <a href="/ai-assistant" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>AI Ассистент</a>
+                      <a href="/admin/users" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Пользователи</a>
                       <a href="/admin/billing/overview" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Биллинг — Обзор</a>
                       <a href="/admin/billing/users" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Биллинг — Пользователи</a>
                       <a href="/admin/billing/settings" className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist" onClick={() => setShowAdminMenu(false)}>Биллинг — Настройки</a>
@@ -331,6 +350,29 @@ export default function DashboardPage() {
                   Настройки вашего аккаунта и интеграций
                 </p>
               </div>
+
+              {/* ── Баланс ── */}
+              <section className="mb-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+                <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">Баланс</h2>
+                <p className="text-sm text-zinc-500 mb-4">
+                  Ваш текущий баланс для оплаты AI-запросов.
+                </p>
+                <div className="flex items-end gap-3">
+                  <span className="text-4xl font-bold font-geist tabular-nums text-zinc-900">
+                    {balance === null ? (
+                      <span className="text-zinc-300">—</span>
+                    ) : (
+                      balance.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    )}
+                  </span>
+                  <span className="text-2xl font-medium text-zinc-400 mb-0.5">₽</span>
+                </div>
+                {balance !== null && balance <= 0 && (
+                  <p className="mt-2 text-sm text-rose-600 font-medium">
+                    Баланс исчерпан — AI-ассистент недоступен. Пополните баланс у администратора.
+                  </p>
+                )}
+              </section>
 
               {/* ── Настройки Avito API ── */}
               <section className="rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
