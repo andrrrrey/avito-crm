@@ -125,11 +125,28 @@ export default function DashboardPage() {
   const [adminSaving, setAdminSaving] = useState(false);
   const [adminSaveMsg, setAdminSaveMsg] = useState<string | null>(null);
 
-  // Admin-only: Vector Store files
+  // Admin-only: Vector Store files state
   const [vsUploading, setVsUploading] = useState(false);
   const [vsDeletingId, setVsDeletingId] = useState<string | null>(null);
   const [vsFileError, setVsFileError] = useState<string | null>(null);
   const vsFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Admin-only: Vector Store files SWR (must be before callbacks that use mutateVsFiles)
+  const hasVectorStore = !!(
+    isAdmin &&
+    aiSettings?.provider === "openai" &&
+    aiSettings?.hasApiKey &&
+    aiSettings?.vectorStoreId
+  );
+  const {
+    data: vsFilesData,
+    mutate: mutateVsFiles,
+    isLoading: vsFilesLoading,
+  } = useSWR<{ ok: boolean; files: VsFile[] }>(
+    hasVectorStore ? "/api/ai-assistant/files" : null,
+    fetcher,
+  );
+  const vsFiles = vsFilesData?.ok ? vsFilesData.files : [];
 
   useEffect(() => {
     if (!settings) return;
@@ -289,23 +306,6 @@ export default function DashboardPage() {
   const [kbDeletingId, setKbDeletingId] = useState<string | null>(null);
   const [kbFileError, setKbFileError] = useState<string | null>(null);
   const kbFileInputRef = useRef<HTMLInputElement>(null);
-
-  // Admin-only: Vector Store files
-  const hasVectorStore = !!(
-    isAdmin &&
-    aiSettings?.provider === "openai" &&
-    aiSettings?.hasApiKey &&
-    aiSettings?.vectorStoreId
-  );
-  const {
-    data: vsFilesData,
-    mutate: mutateVsFiles,
-    isLoading: vsFilesLoading,
-  } = useSWR<{ ok: boolean; files: VsFile[] }>(
-    hasVectorStore ? "/api/ai-assistant/files" : null,
-    fetcher,
-  );
-  const vsFiles = vsFilesData?.ok ? vsFilesData.files : [];
 
   const handleKbUpload = useCallback(async () => {
     const file = kbFileInputRef.current?.files?.[0];
