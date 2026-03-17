@@ -533,7 +533,9 @@ function PageInner() {
 
   const [rtConnected, setRtConnected] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState(false);
   const refreshedChatsRef = useRef<Set<string>>(new Set());
+  const refreshRetryRef = useRef<Record<string, number>>({});
   const selectedChatCacheRef = useRef<Record<string, ChatItem>>({});
 
   // Интервалы обновления: при активном SSE — редко (SSE сам присылает изменения),
@@ -917,24 +919,41 @@ function PageInner() {
     };
   }, [selectedChatId, mutateMsgs]);
 
-  // Refresh history once if server suggests
+  const triggerMsgRefresh = useCallback(async (chatId: string) => {
+    setRefreshing(true);
+    setRefreshError(false);
+    try {
+      const res = await apiFetch(`/api/chats/${chatId}/messages?refresh=1`).catch(() => null);
+      if (!res || !res.ok) {
+        // Refresh failed — allow retry next time
+        refreshedChatsRef.current.delete(chatId);
+        setRefreshError(true);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+    await mutateMsgs().catch(() => null);
+  }, [mutateMsgs]);
+
+  // Refresh history once if server suggests (retry up to 3 times on failure)
   useEffect(() => {
     if (!selectedChatId) return;
     if (!msgData?.needsRefresh) return;
+
+    const retries = refreshRetryRef.current[selectedChatId] ?? 0;
+    if (retries >= 3) return; // Give up after 3 attempts
+
     if (refreshedChatsRef.current.has(selectedChatId)) return;
-
     refreshedChatsRef.current.add(selectedChatId);
+    refreshRetryRef.current[selectedChatId] = retries + 1;
 
-    (async () => {
-      setRefreshing(true);
-      try {
-        await apiFetch(`/api/chats/${selectedChatId}/messages?refresh=1`).catch(() => null);
-      } finally {
-        setRefreshing(false);
-      }
-      await mutateMsgs().catch(() => null);
-    })();
-  }, [selectedChatId, msgData?.needsRefresh, mutateMsgs]);
+    triggerMsgRefresh(selectedChatId);
+  }, [selectedChatId, msgData?.needsRefresh, triggerMsgRefresh]);
+
+  // Reset refresh state when switching chats
+  useEffect(() => {
+    setRefreshError(false);
+  }, [selectedChatId]);
 
   async function markMessagesReadLocally() {
     await mutateMsgs(
@@ -1597,10 +1616,21 @@ function PageInner() {
                   )}
 
                   {msgItems.length === 0 && !refreshing && (
-                    <div className="flex justify-center pt-8">
+                    <div className="flex flex-col items-center gap-3 pt-8">
                       <span className="text-sm text-zinc-400 font-geist">
-                        Сообщений пока нет
+                        {refreshError ? "Не удалось загрузить историю" : "Сообщений пока нет"}
                       </span>
+                      {selectedChatId && (
+                        <button
+                          onClick={() => {
+                            refreshedChatsRef.current.delete(selectedChatId);
+                            triggerMsgRefresh(selectedChatId);
+                          }}
+                          className="text-xs text-sky-600 hover:text-sky-700 underline font-geist"
+                        >
+                          Загрузить историю из Avito
+                        </button>
+                      )}
                     </div>
                   )}
 
