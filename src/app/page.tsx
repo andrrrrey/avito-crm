@@ -1037,6 +1037,15 @@ function PageInner() {
   const [webhookLoading, setWebhookLoading] = useState(false);
   const [webhookError, setWebhookError] = useState<string | null>(null);
   const [showDiag, setShowDiag] = useState(false);
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
+
+  // Admin check
+  const { data: meData } = useSWR<{ ok: boolean; user: { role: string } | null }>(
+    "/api/auth/me",
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+  const isAdmin = meData?.user?.role === "ADMIN";
 
   async function toggleWebhookSubscription() {
     setWebhookLoading(true);
@@ -1189,18 +1198,6 @@ function PageInner() {
               AITOCRM
             </span>
 
-            {/* Status badges – hidden on smallest screens */}
-            <span
-              className={cn(
-                "hidden sm:inline-flex text-[10px] px-2 py-0.5 rounded-full font-medium font-geist",
-                rtConnected
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-zinc-100 text-zinc-500"
-              )}
-            >
-              {rtConnected ? "● RT" : "○ RT"}
-            </span>
-
             {IS_MOCK && (
               <span className="hidden sm:inline-flex text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium font-geist">
                 MOCK
@@ -1210,8 +1207,8 @@ function PageInner() {
 
           {/* Right: controls + nav */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* AI + Webhook – visible from md */}
-            {webhookDiag && (
+            {/* AI + Webhook – visible from md, admin only */}
+            {isAdmin && webhookDiag && (
               <span
                 className={cn(
                   "hidden md:inline-flex text-[10px] px-2 py-0.5 rounded-full font-medium font-geist",
@@ -1224,7 +1221,7 @@ function PageInner() {
               </span>
             )}
 
-            {!IS_MOCK && (
+            {isAdmin && !IS_MOCK && (
               <button
                 onClick={toggleWebhookSubscription}
                 disabled={webhookLoading}
@@ -1245,8 +1242,8 @@ function PageInner() {
               </button>
             )}
 
-            {/* Diagnostics – md+ */}
-            {webhookDiag && !webhookDiag.healthy && (
+            {/* Diagnostics – md+, admin only */}
+            {isAdmin && webhookDiag && !webhookDiag.healthy && (
               <button
                 onClick={() => setShowDiag((v) => !v)}
                 className="hidden md:inline-flex text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium hover:bg-rose-200 transition font-geist"
@@ -1260,22 +1257,66 @@ function PageInner() {
               href="/dashboard"
               className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-zinc-100 hover:bg-zinc-200 transition font-geist whitespace-nowrap"
             >
-              Кабинет
+              Настройки
             </a>
-            <a
-              href="/ai-assistant"
-              className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-zinc-950 text-white hover:bg-zinc-800 transition font-geist whitespace-nowrap"
-            >
-              <span className="hidden sm:inline">AI Ассистент</span>
-              <span className="sm:hidden">AI</span>
-            </a>
+            {isAdmin && (
+              <a
+                href="/ai-assistant"
+                className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-zinc-950 text-white hover:bg-zinc-800 transition font-geist whitespace-nowrap"
+              >
+                <span className="hidden sm:inline">AI Ассистент</span>
+                <span className="sm:hidden">AI</span>
+              </a>
+            )}
+            {isAdmin && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowAdminMenu((v) => !v)}
+                  className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-violet-600 text-white hover:bg-violet-700 transition font-geist whitespace-nowrap"
+                >
+                  Админка
+                </button>
+                {showAdminMenu && (
+                  <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-zinc-200 rounded-2xl shadow-lg py-1 min-w-[180px]">
+                    <a
+                      href="/ai-assistant"
+                      className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist"
+                      onClick={() => setShowAdminMenu(false)}
+                    >
+                      AI Ассистент
+                    </a>
+                    <a
+                      href="/admin/billing/overview"
+                      className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist"
+                      onClick={() => setShowAdminMenu(false)}
+                    >
+                      Биллинг — Обзор
+                    </a>
+                    <a
+                      href="/admin/billing/users"
+                      className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist"
+                      onClick={() => setShowAdminMenu(false)}
+                    >
+                      Биллинг — Пользователи
+                    </a>
+                    <a
+                      href="/admin/billing/settings"
+                      className="block px-4 py-2 text-xs text-zinc-700 hover:bg-zinc-50 font-geist"
+                      onClick={() => setShowAdminMenu(false)}
+                    >
+                      Биллинг — Настройки
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </header>
 
         {/* ── Diagnostics / error banners ── */}
-        {(showDiag && (webhookDiag?.issues?.length ?? 0) > 0) || webhookError ? (
+        {(isAdmin && showDiag && (webhookDiag?.issues?.length ?? 0) > 0) || webhookError ? (
           <div className="px-3 md:px-6 pb-2 shrink-0 space-y-2">
-            {showDiag && (webhookDiag?.issues?.length ?? 0) > 0 && (
+            {isAdmin && showDiag && (webhookDiag?.issues?.length ?? 0) > 0 && (
               <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 space-y-1">
                 <div className="text-xs font-semibold text-rose-900">
                   Диагностика конфигурации:
