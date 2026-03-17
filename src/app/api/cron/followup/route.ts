@@ -98,13 +98,21 @@ export async function POST(req: Request) {
     errors: 0,
   };
 
-  // Получаем accountId пользователей, у которых дожим отключён.
-  // Если пользователь использует env-переменные (avitoAccountId === null в БД),
-  // подставляем env.AVITO_ACCOUNT_ID как его эффективный accountId.
-  const usersWithFollowupDisabled = await prisma.user.findMany({
-    where: { followupEnabled: false },
-    select: { avitoAccountId: true },
+  // Получаем всех пользователей: для отключённых дожимов и для кастомных текстов.
+  const allUsers = await prisma.user.findMany({
+    select: { avitoAccountId: true, followupEnabled: true, followupMessage: true },
   });
+
+  // Карта accountId → текст дожима (только для пользователей с кастомным текстом)
+  const followupMessageByAccountId = new Map<number, string>();
+  for (const u of allUsers) {
+    if (u.followupMessage) {
+      const accountId = u.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null;
+      if (accountId) followupMessageByAccountId.set(accountId, u.followupMessage);
+    }
+  }
+
+  const usersWithFollowupDisabled = allUsers.filter((u) => !u.followupEnabled);
   const disabledAccountIds = usersWithFollowupDisabled
     .map((u) => u.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null)
     .filter((id): id is number => id !== null && id !== 0);
@@ -150,9 +158,12 @@ export async function POST(req: Request) {
     const lastMsg = chat.messages[0];
     if (!lastMsg || lastMsg.direction !== "OUT") continue;
 
+    // Определяем текст дожима для данного аккаунта (кастомный или дефолтный)
+    const followupText = followupMessageByAccountId.get(chat.accountId) ?? FOLLOWUP_TEXT;
+
     // Проверка 1: не отправляем дожим если текст дожима уже есть в истории
     const alreadySentFollowup = chat.messages.some(
-      (m: { direction: string; text: string }) => m.direction === "OUT" && m.text.trim() === FOLLOWUP_TEXT.trim()
+      (m: { direction: string; text: string }) => m.direction === "OUT" && m.text.trim() === followupText.trim()
     );
     if (alreadySentFollowup) {
       stats.skippedDuplicate++;
@@ -198,7 +209,7 @@ export async function POST(req: Request) {
             chatId: chat.id,
             avitoMessageId: fakeId,
             direction: "OUT",
-            text: FOLLOWUP_TEXT,
+            text: followupText,
             sentAt,
             isRead: true,
             raw: { mock: true, from: "bot_followup" },
@@ -211,12 +222,12 @@ export async function POST(req: Request) {
           data: {
             followupSentAt: sentAt,
             lastMessageAt: sentAt,
-            lastMessageText: FOLLOWUP_TEXT,
+            lastMessageText: followupText,
             raw: {
               ...rawObj,
               followup: {
                 sentAt: sentAt.toISOString(),
-                text: FOLLOWUP_TEXT,
+                text: followupText,
                 mock: true,
               },
             },
@@ -235,7 +246,7 @@ export async function POST(req: Request) {
             id: fakeId,
             chatId: chat.id,
             direction: "OUT",
-            text: FOLLOWUP_TEXT,
+            text: followupText,
             sentAt: sentAt.toISOString(),
             isRead: true,
           },
@@ -244,7 +255,7 @@ export async function POST(req: Request) {
         stats.followupsSent++;
       } else {
         // Реальный режим — отправляем через Avito API
-        const resp: any = await avitoSendTextMessage(chat.avitoChatId, FOLLOWUP_TEXT);
+        const resp: any = await avitoSendTextMessage(chat.avitoChatId, followupText);
         const outId = pickFirstString(
           resp?.id,
           resp?.message_id,
@@ -257,7 +268,7 @@ export async function POST(req: Request) {
             chatId: chat.id,
             avitoMessageId: outId,
             direction: "OUT",
-            text: FOLLOWUP_TEXT,
+            text: followupText,
             sentAt,
             isRead: true,
             raw: { from: "bot_followup", avitoSendResp: resp ?? {} },
@@ -270,12 +281,12 @@ export async function POST(req: Request) {
           data: {
             followupSentAt: sentAt,
             lastMessageAt: sentAt,
-            lastMessageText: FOLLOWUP_TEXT,
+            lastMessageText: followupText,
             raw: {
               ...rawObj,
               followup: {
                 sentAt: sentAt.toISOString(),
-                text: FOLLOWUP_TEXT,
+                text: followupText,
                 avitoMessageId: outId,
               },
             },

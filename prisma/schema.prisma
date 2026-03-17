@@ -124,6 +124,8 @@ model User {
 
   // Дожим: отправлять ли напоминание "Актуален ли ваш заказ?"
   followupEnabled  Boolean @default(true)
+  // Дожим: текст сообщения (null = дефолтный «Актуален ли ваш заказ?»)
+  followupMessage  String?
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
