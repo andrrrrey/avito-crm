@@ -43,13 +43,14 @@ export async function GET(req: Request) {
     select: { avitoAccountId: true },
   });
 
-  const where: any = {};
+  const accountId = dbUser?.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null;
 
-  if (dbUser?.avitoAccountId) {
-    where.accountId = dbUser.avitoAccountId;
-  } else if (env.AVITO_ACCOUNT_ID) {
-    where.accountId = env.AVITO_ACCOUNT_ID;
+  // Если аккаунт не определён — не показываем чужие чаты
+  if (accountId === null) {
+    return NextResponse.json({ ok: true, items: [] });
   }
+
+  const where: any = { accountId };
 
   if (status === "BOT" || status === "MANAGER" || status === "INACTIVE") {
     where.status = status;
