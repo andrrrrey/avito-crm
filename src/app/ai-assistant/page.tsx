@@ -64,14 +64,6 @@ type AiSettings = {
   model: string;
 };
 
-type VsFile = {
-  id: string;
-  filename?: string;
-  bytes?: number;
-  status: string;
-  created_at: number;
-};
-
 type KbFile = {
   id: string;
   filename: string;
@@ -146,27 +138,6 @@ export default function AiAssistantPage() {
     setDeepseekApiKeyTouched(false);
   }, [settings]);
 
-  // Files — только для OpenAI
-  const hasVectorStore = !!(
-    provider === "openai" &&
-    settings?.hasApiKey &&
-    settings?.vectorStoreId
-  );
-  const {
-    data: filesData,
-    mutate: mutateFiles,
-    isLoading: filesLoading,
-  } = useSWR<{ ok: boolean; files: VsFile[] }>(
-    hasVectorStore ? "/api/ai-assistant/files" : null,
-    fetcher,
-  );
-  const files = filesData?.ok ? filesData.files : [];
-
-  const [uploading, setUploading] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [fileError, setFileError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // Files — для DeepSeek (локальная база знаний)
   const hasDeepseekKb = !!(provider === "deepseek" && settings?.hasDeepseekApiKey);
   const {
@@ -229,60 +200,6 @@ export default function AiAssistantPage() {
     deepseekApiKey, deepseekApiKeyTouched,
     vectorStoreId, instructions, escalatePrompt, model, mutateSettings,
   ]);
-
-  const handleUpload = useCallback(async () => {
-    const file = fileInputRef.current?.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    setFileError(null);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-
-      const r = await apiFetch("/api/ai-assistant/files", {
-        method: "POST",
-        body: fd,
-      });
-      const j = await r.json();
-      if (j.ok) {
-        mutateFiles();
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      } else {
-        setFileError(j.error || "Ошибка загрузки");
-      }
-    } catch {
-      setFileError("Ошибка сети");
-    } finally {
-      setUploading(false);
-    }
-  }, [mutateFiles]);
-
-  const handleDelete = useCallback(
-    async (fileId: string) => {
-      if (!confirm("Удалить файл из Vector Store?")) return;
-      setDeletingId(fileId);
-      setFileError(null);
-      try {
-        const r = await apiFetch("/api/ai-assistant/files", {
-          method: "DELETE",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ fileId }),
-        });
-        const j = await r.json();
-        if (j.ok) {
-          mutateFiles();
-        } else {
-          setFileError(j.error || "Ошибка удаления");
-        }
-      } catch {
-        setFileError("Ошибка сети");
-      } finally {
-        setDeletingId(null);
-      }
-    },
-    [mutateFiles],
-  );
 
   const handleKbUpload = useCallback(async () => {
     const file = kbFileInputRef.current?.files?.[0];
@@ -615,20 +532,6 @@ export default function AiAssistantPage() {
                   </label>
                 )}
 
-                {/* Instructions */}
-                <label className="mt-4 block">
-                  <span className="text-sm font-medium text-zinc-700">
-                    Инструкция для ассистента
-                  </span>
-                  <textarea
-                    rows={5}
-                    placeholder="Вы — вежливый помощник по продажам на Avito..."
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25 resize-y"
-                  />
-                </label>
-
                 {/* Save */}
                 <div className="mt-5 flex items-center gap-3">
                   <button
@@ -652,156 +555,6 @@ export default function AiAssistantPage() {
                   )}
                 </div>
               </section>
-
-              {/* ── Промпт переключения на менеджера ── */}
-              <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
-                <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">
-                  Промпт переключения на менеджера
-                </h2>
-                <p className="text-sm text-zinc-500 mb-4">
-                  Инструкция для ИИ, описывающая когда и как переводить диалог на менеджера.
-                  Если оставить пустым — будет использоваться промпт по умолчанию.
-                </p>
-
-                <textarea
-                  rows={12}
-                  placeholder={`## Перевод на менеджера\n\nТы ОБЯЗАН добавить маркер [ESCALATE] и перевести на менеджера, если:\n- Клиент просит позвать человека...\n- ...`}
-                  value={escalatePrompt}
-                  onChange={(e) => setEscalatePrompt(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-300 bg-zinc-100/90 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/25 resize-y font-mono leading-relaxed"
-                />
-
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <button
-                    onClick={saveSettings}
-                    disabled={saving}
-                    className="rounded-xl bg-sky-600 px-5 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
-                  >
-                    {saving ? "Сохранение..." : "Сохранить"}
-                  </button>
-                  {escalatePrompt && (
-                    <button
-                      onClick={() => setEscalatePrompt("")}
-                      className="rounded-xl bg-zinc-200/80 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm ring-1 ring-zinc-900/10 hover:bg-zinc-200/90 transition-colors"
-                    >
-                      Сбросить на по умолчанию
-                    </button>
-                  )}
-                  {saveMsg && (
-                    <span
-                      className={cn(
-                        "text-sm",
-                        saveMsg === "Сохранено"
-                          ? "text-emerald-600"
-                          : "text-rose-600",
-                      )}
-                    >
-                      {saveMsg}
-                    </span>
-                  )}
-                </div>
-              </section>
-
-              {/* ── Файлы Vector Store — только для OpenAI ── */}
-              {provider === "openai" && (
-                <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
-                  <h2 className="text-lg font-semibold text-zinc-900 mb-4 font-geist">
-                    Файлы Vector Store
-                  </h2>
-
-                  {!hasVectorStore ? (
-                    <p className="text-sm text-zinc-500">
-                      Укажите OpenAI API-ключ и Vector Store ID выше, чтобы управлять файлами.
-                    </p>
-                  ) : (
-                    <>
-                      {/* Upload */}
-                      <div className="flex flex-wrap items-center gap-3 mb-4">
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          className="text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
-                        />
-                        <button
-                          onClick={handleUpload}
-                          disabled={uploading}
-                          className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-sky-700 transition-colors"
-                        >
-                          {uploading ? "Загрузка..." : "Загрузить"}
-                        </button>
-                      </div>
-
-                      {fileError && (
-                        <div className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-700/10">
-                          {fileError}
-                        </div>
-                      )}
-
-                      {/* File list */}
-                      {filesLoading ? (
-                        <div className="text-sm text-zinc-400 font-geist">Загрузка списка файлов...</div>
-                      ) : files.length === 0 ? (
-                        <div className="text-sm text-zinc-400 font-geist">
-                          Нет файлов в Vector Store
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm text-left">
-                            <thead>
-                              <tr className="border-b border-zinc-100 text-zinc-500">
-                                <th className="py-2 pr-4 font-medium">Имя файла</th>
-                                <th className="py-2 pr-4 font-medium">Размер</th>
-                                <th className="py-2 pr-4 font-medium">Статус</th>
-                                <th className="py-2 pr-4 font-medium">Дата</th>
-                                <th className="py-2 font-medium"></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {files.map((f) => (
-                                <tr
-                                  key={f.id}
-                                  className="border-b border-zinc-200/70 hover:bg-zinc-200/50"
-                                >
-                                  <td className="py-2 pr-4 text-zinc-700">
-                                    {f.filename || f.id}
-                                  </td>
-                                  <td className="py-2 pr-4 text-zinc-500">
-                                    {formatBytes(f.bytes)}
-                                  </td>
-                                  <td className="py-2 pr-4">
-                                    <span
-                                      className={cn(
-                                        "inline-block rounded-full px-2 py-0.5 text-xs font-medium",
-                                        f.status === "completed"
-                                          ? "bg-emerald-50 text-emerald-700"
-                                          : "bg-amber-50 text-amber-700",
-                                      )}
-                                    >
-                                      {f.status}
-                                    </span>
-                                  </td>
-                                  <td className="py-2 pr-4 text-zinc-500">
-                                    {formatDate(f.created_at)}
-                                  </td>
-                                  <td className="py-2">
-                                    <button
-                                      onClick={() => handleDelete(f.id)}
-                                      disabled={deletingId === f.id}
-                                      className="rounded-lg px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors"
-                                    >
-                                      {deletingId === f.id ? "..." : "Удалить"}
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </section>
-              )}
 
               {/* ── База знаний DeepSeek ── */}
               {provider === "deepseek" && (
