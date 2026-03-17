@@ -4,7 +4,7 @@ import "./globals.css";
 import AuroraBackground from "@/components/AuroraBackground";
 
 export const metadata: Metadata = {
-  title: "AITOCRM — Console",
+  title: "AITOCRM — ИИ CRM для Авито",
   description: "Avito CRM с AI-ответами",
 };
 
