@@ -55,6 +55,7 @@ type UserSettings = {
   aiInstructions: string;
   aiEscalatePrompt: string;
   followupEnabled: boolean;
+  followupMessage: string;
 };
 
 type BalanceData = {
@@ -109,6 +110,7 @@ export default function DashboardPage() {
   const [aiInstructions, setAiInstructions] = useState("");
   const [aiEscalatePrompt, setAiEscalatePrompt] = useState("");
   const [followupEnabled, setFollowupEnabled] = useState(true);
+  const [followupMessage, setFollowupMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -126,6 +128,7 @@ export default function DashboardPage() {
     setAiInstructions(settings.aiInstructions ?? "");
     setAiEscalatePrompt(settings.aiEscalatePrompt ?? "");
     setFollowupEnabled(settings.followupEnabled ?? true);
+    setFollowupMessage(settings.followupMessage ?? "");
     setAvitoClientSecret("");
     setAvitoClientSecretTouched(false);
   }, [settings]);
@@ -141,6 +144,7 @@ export default function DashboardPage() {
         aiInstructions,
         aiEscalatePrompt,
         followupEnabled,
+        followupMessage,
       };
       if (avitoClientSecretTouched && avitoClientSecret) {
         payload.avitoClientSecret = avitoClientSecret;
@@ -165,7 +169,7 @@ export default function DashboardPage() {
     }
   }, [
     avitoClientId, avitoClientSecret, avitoClientSecretTouched,
-    avitoAccountId, aiEnabled, aiInstructions, aiEscalatePrompt, followupEnabled, mutateSettings,
+    avitoAccountId, aiEnabled, aiInstructions, aiEscalatePrompt, followupEnabled, followupMessage, mutateSettings,
   ]);
 
   const generateInstructions = useCallback(async () => {
@@ -578,7 +582,7 @@ export default function DashboardPage() {
               <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
                 <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">Дожим ИИ-ботом</h2>
                 <p className="text-sm text-zinc-500 mb-4">
-                  Если включено, бот автоматически отправляет сообщение «Актуален ли ваш заказ?»
+                  Если включено, бот автоматически отправляет сообщение-напоминание
                   клиентам, которые не ответили в течение 1 часа.
                 </p>
 
@@ -604,6 +608,22 @@ export default function DashboardPage() {
                     {followupEnabled ? "Дожим включён" : "Дожим отключён"}
                   </span>
                 </label>
+
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
+                    Фраза сообщения
+                  </label>
+                  <input
+                    type="text"
+                    value={followupMessage}
+                    onChange={(e) => setFollowupMessage(e.target.value)}
+                    placeholder="Актуален ли ваш заказ?"
+                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  />
+                  <p className="mt-1 text-xs text-zinc-400">
+                    По умолчанию: «Актуален ли ваш заказ?»
+                  </p>
+                </div>
 
                 <div className="mt-5 flex items-center gap-3">
                   <button

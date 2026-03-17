@@ -28,6 +28,7 @@ export async function GET(req: Request) {
       aiInstructions: true,
       aiEscalatePrompt: true,
       followupEnabled: true,
+      followupMessage: true,
     },
   });
 
@@ -47,6 +48,7 @@ export async function GET(req: Request) {
       aiInstructions: user.aiInstructions ?? "",
       aiEscalatePrompt: user.aiEscalatePrompt ?? "",
       followupEnabled: user.followupEnabled,
+      followupMessage: user.followupMessage ?? "",
     },
   });
 }
@@ -72,6 +74,7 @@ export async function PUT(req: Request) {
     aiInstructions,
     aiEscalatePrompt,
     followupEnabled,
+    followupMessage,
   } = body;
 
   const data: Record<string, unknown> = {};
@@ -90,6 +93,7 @@ export async function PUT(req: Request) {
   if (typeof aiInstructions === "string") data.aiInstructions = aiInstructions || null;
   if (typeof aiEscalatePrompt === "string") data.aiEscalatePrompt = aiEscalatePrompt || null;
   if (typeof followupEnabled === "boolean") data.followupEnabled = followupEnabled;
+  if (typeof followupMessage === "string") data.followupMessage = followupMessage.trim() || null;
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ ok: false, error: "nothing_to_update" }, { status: 400 });
@@ -110,6 +114,7 @@ export async function PUT(req: Request) {
       aiInstructions: true,
       aiEscalatePrompt: true,
       followupEnabled: true,
+      followupMessage: true,
     },
   });
 
@@ -127,6 +132,7 @@ export async function PUT(req: Request) {
       aiInstructions: user.aiInstructions ?? "",
       aiEscalatePrompt: user.aiEscalatePrompt ?? "",
       followupEnabled: user.followupEnabled,
+      followupMessage: user.followupMessage ?? "",
     },
   });
 }
