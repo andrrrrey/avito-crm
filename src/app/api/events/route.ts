@@ -1,5 +1,8 @@
-import { requireAuth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { env } from "@/lib/env";
 import { makeEvent, subscribe, subscribeChat, type CRMRealtimeEvent } from "@/lib/realtime";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,8 +13,16 @@ function formatSse(event: CRMRealtimeEvent) {
 }
 
 export async function GET(req: Request) {
-  const guard = await requireAuth(req);
-  if (guard) return guard;
+  const sessionUser = await getSessionUser(req);
+  if (!sessionUser) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+    select: { avitoAccountId: true },
+  });
+  const userAccountId = dbUser?.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null;
 
   const url = new URL(req.url);
   const chatId = (url.searchParams.get("chatId") || "").trim() || null;
@@ -32,6 +43,12 @@ export async function GET(req: Request) {
 
         // На всякий случай: если вдруг прилетит событие с другим chatId.
         if (chatId && e.chatId && e.chatId !== chatId && e.type !== "ping" && e.type !== "hello") return;
+
+        // Фильтруем события по accountId — не отправляем чужие чаты.
+        // Служебные события (ping/hello) всегда пропускаем.
+        if (e.type !== "ping" && e.type !== "hello" && e.accountId !== undefined && e.accountId !== null) {
+          if (userAccountId === null || e.accountId !== userAccountId) return;
+        }
 
         controller.enqueue(encoder.encode(formatSse(e)));
       };

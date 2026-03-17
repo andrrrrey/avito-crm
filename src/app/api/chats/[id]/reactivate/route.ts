@@ -53,6 +53,7 @@ export async function POST(req: Request, ctx: Ctx) {
     type: "chat_updated",
     chatId: chat.id,
     avitoChatId: chat.avitoChatId,
+    accountId: chat.accountId,
     chatSnapshot: snap ? {
       id: snap.id,
       status: snap.status as any,

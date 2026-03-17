@@ -17,6 +17,7 @@ export type CRMRealtimeEvent = {
     | "chat_read"
     | "new_incoming";
   ts: number;
+  accountId?: number | null;
   chatId?: string;
   avitoChatId?: string;
   messageId?: string;

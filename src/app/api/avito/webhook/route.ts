@@ -111,7 +111,7 @@ async function tryFillChatPrice(chatId: string, itemId: number) {
 
   const cur = await prisma.chat.findUnique({
     where: { id: chatId },
-    select: { price: true, itemTitle: true, adUrl: true, raw: true },
+    select: { price: true, itemTitle: true, adUrl: true, raw: true, accountId: true },
   });
   if (!cur) return;
   if (cur.price !== null && cur.price !== undefined) return;
@@ -142,7 +142,7 @@ async function tryFillChatPrice(chatId: string, itemId: number) {
 
     await prisma.chat.update({ where: { id: chatId }, data: patch });
 
-    publish({ type: "chat_updated", chatId });
+    publish({ type: "chat_updated", chatId, accountId: cur.accountId });
   } catch {
     // молча: не валим вебхук
   }
@@ -160,7 +160,7 @@ async function runDevTestBotIfNeeded(args: {
 
   const chat = await prisma.chat.findUnique({
     where: { id: args.chatId },
-    select: { id: true, avitoChatId: true, status: true, customerName: true, raw: true },
+    select: { id: true, avitoChatId: true, status: true, customerName: true, raw: true, accountId: true },
   });
   if (!chat?.avitoChatId) return;
 
@@ -211,7 +211,7 @@ async function runDevTestBotIfNeeded(args: {
       },
     });
 
-    publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+    publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
     return;
   }
 
@@ -265,13 +265,14 @@ async function runDevTestBotIfNeeded(args: {
 
       await prisma.chat.update({ where: { id: chat.id }, data: { unreadCount: unread } });
 
-      publish({ type: "chat_read", chatId: chat.id, avitoChatId: chat.avitoChatId });
+      publish({ type: "chat_read", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
 
       if (ins.count > 0) {
         publish({
           type: "message_created",
           chatId: chat.id,
           avitoChatId: chat.avitoChatId,
+          accountId: chat.accountId,
           messageId: fakeId,
           direction: "OUT",
           message: {
@@ -285,7 +286,7 @@ async function runDevTestBotIfNeeded(args: {
         });
       }
 
-      publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+      publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
       return;
     }
 
@@ -342,7 +343,7 @@ async function runDevTestBotIfNeeded(args: {
 
       await prisma.chat.update({ where: { id: chat.id }, data: { unreadCount: unread } });
 
-      publish({ type: "chat_read", chatId: chat.id, avitoChatId: chat.avitoChatId });
+      publish({ type: "chat_read", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
 
       if (ins.count > 0) {
         const dbMsg = await prisma.message.findUnique({
@@ -354,6 +355,7 @@ async function runDevTestBotIfNeeded(args: {
           type: "message_created",
           chatId: chat.id,
           avitoChatId: chat.avitoChatId,
+          accountId: chat.accountId,
           messageId: dbMsg?.id ?? outId,
           direction: "OUT",
           message: {
@@ -367,7 +369,7 @@ async function runDevTestBotIfNeeded(args: {
         });
       }
 
-      publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+      publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
     }
   } catch {}
 }
@@ -381,7 +383,7 @@ async function tryAiAssistantReply(args: {
   // Проверяем, что чат в статусе BOT
   const chat = await prisma.chat.findUnique({
     where: { id: args.chatId },
-    select: { id: true, avitoChatId: true, status: true, raw: true },
+    select: { id: true, avitoChatId: true, status: true, raw: true, accountId: true },
   });
   if (!chat) {
     console.log("[AI] Skip: chat not found", { chatId: args.chatId });
@@ -449,13 +451,14 @@ async function tryAiAssistantReply(args: {
     });
     await prisma.chat.update({ where: { id: chat.id }, data: { unreadCount: unread } });
 
-    publish({ type: "chat_read", chatId: chat.id, avitoChatId: chat.avitoChatId });
+    publish({ type: "chat_read", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
 
     if (ins.count > 0) {
       publish({
         type: "message_created",
         chatId: chat.id,
         avitoChatId: chat.avitoChatId,
+        accountId: chat.accountId,
         messageId: fakeId,
         direction: "OUT",
         message: {
@@ -468,7 +471,7 @@ async function tryAiAssistantReply(args: {
         },
       });
     }
-    publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+    publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
 
     // Эскалация после отправки прощального сообщения
     if (shouldEscalate) {
@@ -476,7 +479,7 @@ async function tryAiAssistantReply(args: {
         where: { id: chat.id },
         data: { status: "MANAGER" },
       });
-      publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+      publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
       console.log(`[AI] Chat ${chat.id} escalated to MANAGER (mock mode)`);
     }
     return;
@@ -520,7 +523,7 @@ async function tryAiAssistantReply(args: {
     });
     await prisma.chat.update({ where: { id: chat.id }, data: { unreadCount: unread } });
 
-    publish({ type: "chat_read", chatId: chat.id, avitoChatId: chat.avitoChatId });
+    publish({ type: "chat_read", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
 
     if (ins.count > 0) {
       const dbMsg = await prisma.message.findUnique({
@@ -532,6 +535,7 @@ async function tryAiAssistantReply(args: {
         type: "message_created",
         chatId: chat.id,
         avitoChatId: chat.avitoChatId,
+        accountId: chat.accountId,
         messageId: dbMsg?.id ?? outId,
         direction: "OUT",
         message: {
@@ -545,7 +549,7 @@ async function tryAiAssistantReply(args: {
       });
     }
 
-    publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+    publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
 
     // Эскалация после отправки прощального сообщения
     if (shouldEscalate) {
@@ -553,7 +557,7 @@ async function tryAiAssistantReply(args: {
         where: { id: chat.id },
         data: { status: "MANAGER" },
       });
-      publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+      publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
       console.log(`[AI] Chat ${chat.id} escalated to MANAGER`);
     }
   } catch (e) {
@@ -819,7 +823,7 @@ export async function POST(req: Request) {
       select: {
         id: true, status: true, customerName: true, itemTitle: true, price: true,
         lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,
-        unreadCount: true, pinned: true,
+        unreadCount: true, pinned: true, accountId: true,
       },
     });
 
@@ -837,11 +841,14 @@ export async function POST(req: Request) {
       pinned: chatSnap.pinned,
     } : undefined;
 
+    const chatAccountId = chatSnap?.accountId;
+
     if (res.created && res.messageId) {
       publish({
         type: "message_created",
         chatId: res.chatId,
         avitoChatId: res.avitoChatId,
+        accountId: chatAccountId,
         messageId: res.messageId,
         direction: res.direction as any,
         message: {
@@ -862,16 +869,17 @@ export async function POST(req: Request) {
         type: "new_incoming",
         chatId: res.chatId,
         avitoChatId: res.avitoChatId,
+        accountId: chatAccountId,
         chatSnapshot,
       });
     }
 
-    publish({ type: "chat_updated", chatId: res.chatId, avitoChatId: res.avitoChatId, chatSnapshot });
+    publish({ type: "chat_updated", chatId: res.chatId, avitoChatId: res.avitoChatId, accountId: chatAccountId, chatSnapshot });
 
     // ✅ Обогащение и price — fire-and-forget, не блокируем ответ вебхука
     if (!env.MOCK_MODE && res.needsEnrich && res.avitoChatId) {
       enrichChatFromAvitoIfMissing(res.chatId, res.avitoChatId)
-        .then(() => publish({ type: "chat_updated", chatId: res.chatId, avitoChatId: res.avitoChatId }))
+        .then(() => publish({ type: "chat_updated", chatId: res.chatId, avitoChatId: res.avitoChatId, accountId: chatAccountId }))
         .catch((e) => console.warn("[webhook] enrichChatFromAvitoIfMissing error:", e));
     }
 
