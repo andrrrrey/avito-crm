@@ -7,15 +7,17 @@ const AVITO_BASE = "https://api.avito.ru";
 // ✅ добавили items:info (нужно для /core/v1/.../items/{item_id})
 const DEFAULT_SCOPE = "messenger:read messenger:write items:info";
 
-/**
- * Возвращает Avito-credentials: сначала из env, потом из БД (первый пользователь с заполненными ключами).
- * Это позволяет задавать ключи как в .env, так и в Личном кабинете.
- */
-export async function getAvitoCredentials(): Promise<{
+export type AvitoCredentials = {
   clientId: string;
   clientSecret: string;
   accountId: number;
-}> {
+};
+
+/**
+ * Возвращает Avito-credentials для конкретного пользователя (по userId),
+ * либо из env, либо из БД (первый пользователь с заполненными ключами).
+ */
+export async function getAvitoCredentials(userId?: string): Promise<AvitoCredentials> {
   if (env.AVITO_CLIENT_ID && env.AVITO_CLIENT_SECRET && env.AVITO_ACCOUNT_ID) {
     return {
       clientId: env.AVITO_CLIENT_ID,
@@ -24,6 +26,26 @@ export async function getAvitoCredentials(): Promise<{
     };
   }
 
+  // Если передан userId — ищем конкретного пользователя
+  if (userId) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        avitoClientId: true,
+        avitoClientSecret: true,
+        avitoAccountId: true,
+      },
+    });
+    if (user?.avitoClientId && user?.avitoClientSecret && user?.avitoAccountId) {
+      return {
+        clientId: user.avitoClientId,
+        clientSecret: user.avitoClientSecret,
+        accountId: user.avitoAccountId,
+      };
+    }
+  }
+
+  // Fallback: первый пользователь с заполненными ключами
   const user = await prisma.user.findFirst({
     where: {
       avitoClientId: { not: null },
@@ -50,6 +72,35 @@ export async function getAvitoCredentials(): Promise<{
   );
 }
 
+/**
+ * Возвращает credentials по avitoAccountId — ищет пользователя с таким avitoAccountId.
+ */
+export async function getAvitoCredentialsByAccountId(accountId: number): Promise<AvitoCredentials> {
+  if (env.AVITO_CLIENT_ID && env.AVITO_CLIENT_SECRET && env.AVITO_ACCOUNT_ID === accountId) {
+    return {
+      clientId: env.AVITO_CLIENT_ID,
+      clientSecret: env.AVITO_CLIENT_SECRET,
+      accountId: env.AVITO_ACCOUNT_ID,
+    };
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { avitoAccountId: accountId },
+    select: { avitoClientId: true, avitoClientSecret: true, avitoAccountId: true },
+  });
+
+  if (user?.avitoClientId && user?.avitoClientSecret && user?.avitoAccountId) {
+    return {
+      clientId: user.avitoClientId,
+      clientSecret: user.avitoClientSecret,
+      accountId: user.avitoAccountId,
+    };
+  }
+
+  // Fallback to global credentials
+  return getAvitoCredentials();
+}
+
 type TokenResp = {
   access_token: string;
   expires_in: number;
@@ -72,15 +123,15 @@ function normalizePrice(v: any): number | null {
   return null;
 }
 
-async function getAccessToken(): Promise<string> {
-  const st = await prisma.integrationState.findUnique({ where: { id: 1 } });
+async function getAccessToken(creds: AvitoCredentials): Promise<string> {
+  // Используем accountId как ключ кэша — у каждого Avito-аккаунта свой токен
+  const stateId = creds.accountId;
+  const st = await prisma.integrationState.findUnique({ where: { id: stateId } });
   const now = Date.now();
 
   if (st?.accessToken && st.expiresAt && st.expiresAt.getTime() - now > 60_000) {
     return st.accessToken;
   }
-
-  const creds = await getAvitoCredentials();
 
   const form = new URLSearchParams();
   form.set("grant_type", "client_credentials");
@@ -103,16 +154,17 @@ async function getAccessToken(): Promise<string> {
   const expiresAt = new Date(Date.now() + (j.expires_in ?? 0) * 1000);
 
   await prisma.integrationState.upsert({
-    where: { id: 1 },
-    create: { id: 1, accessToken: j.access_token, expiresAt },
+    where: { id: stateId },
+    create: { id: stateId, accessToken: j.access_token, expiresAt },
     update: { accessToken: j.access_token, expiresAt },
   });
 
   return j.access_token;
 }
 
-async function avitoFetch(path: string, init?: RequestInit, retry = true) {
-  const token = await getAccessToken();
+async function avitoFetch(path: string, init?: RequestInit, retry = true, creds?: AvitoCredentials) {
+  const resolvedCreds = creds ?? await getAvitoCredentials();
+  const token = await getAccessToken(resolvedCreds);
 
   const r = await fetch(`${AVITO_BASE}${path}`, {
     ...init,
@@ -124,9 +176,9 @@ async function avitoFetch(path: string, init?: RequestInit, retry = true) {
 
   if (r.status === 401 && retry) {
     await prisma.integrationState
-      .update({ where: { id: 1 }, data: { accessToken: null, expiresAt: null } })
+      .update({ where: { id: resolvedCreds.accountId }, data: { accessToken: null, expiresAt: null } })
       .catch(() => null);
-    return avitoFetch(path, init, false);
+    return avitoFetch(path, init, false, resolvedCreds);
   }
 
   if (!r.ok) {
@@ -145,18 +197,19 @@ async function avitoFetch(path: string, init?: RequestInit, retry = true) {
 /**
  * Чаты: пробуем v3 -> v2 -> v1
  */
-export async function avitoListChats(params?: { limit?: number; offset?: number }) {
+export async function avitoListChats(params?: { limit?: number; offset?: number }, creds?: AvitoCredentials) {
   const qs = new URLSearchParams();
   if (params?.limit) qs.set("limit", String(params.limit));
   if (params?.offset !== undefined) qs.set("offset", String(params.offset));
   const q = qs.toString();
   const suffix = q ? `?${q}` : "";
 
-  const { accountId } = await getAvitoCredentials();
+  const resolvedCreds = creds ?? await getAvitoCredentials();
+  const { accountId } = resolvedCreds;
 
   // v3
   try {
-    return await avitoFetch(`/messenger/v3/accounts/${accountId}/chats${suffix}`);
+    return await avitoFetch(`/messenger/v3/accounts/${accountId}/chats${suffix}`, undefined, true, resolvedCreds);
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     // если v3 не существует/не доступен — идем дальше
@@ -168,19 +221,20 @@ export async function avitoListChats(params?: { limit?: number; offset?: number 
 
   // v2
   try {
-    return await avitoFetch(`/messenger/v2/accounts/${accountId}/chats${suffix}`);
+    return await avitoFetch(`/messenger/v2/accounts/${accountId}/chats${suffix}`, undefined, true, resolvedCreds);
   } catch (e: any) {
     const msg = String(e?.message ?? e);
     if (msg.includes("404")) {
-      return avitoFetch(`/messenger/v1/accounts/${accountId}/chats${suffix}`);
+      return avitoFetch(`/messenger/v1/accounts/${accountId}/chats${suffix}`, undefined, true, resolvedCreds);
     }
     throw e;
   }
 }
 
-export async function avitoGetChatInfo(avitoChatId: string) {
+export async function avitoGetChatInfo(avitoChatId: string, creds?: AvitoCredentials) {
   const chatId = encodePathSegmentStrict(avitoChatId);
-  const { accountId } = await getAvitoCredentials();
+  const resolvedCreds = creds ?? await getAvitoCredentials();
+  const { accountId } = resolvedCreds;
 
   const endpoints = [
     `/messenger/v2/accounts/${accountId}/chats/${chatId}`,
@@ -191,7 +245,7 @@ export async function avitoGetChatInfo(avitoChatId: string) {
 
   for (const ep of endpoints) {
     try {
-      return await avitoFetch(ep);
+      return await avitoFetch(ep, undefined, true, resolvedCreds);
     } catch (e: any) {
       lastErr = e;
     }
@@ -205,35 +259,40 @@ export async function avitoGetChatInfo(avitoChatId: string) {
 /**
  * Сообщения: v3. fallback v2/v1.
  */
-export async function avitoListMessages(avitoChatId: string, params?: { limit?: number; offset?: number }) {
+export async function avitoListMessages(avitoChatId: string, params?: { limit?: number; offset?: number }, creds?: AvitoCredentials) {
   const qs = new URLSearchParams();
   if (params?.limit) qs.set("limit", String(params.limit));
   if (params?.offset !== undefined) qs.set("offset", String(params.offset));
   const q = qs.toString();
 
   const chatId = encodePathSegmentStrict(avitoChatId);
-  const { accountId } = await getAvitoCredentials();
+  const resolvedCreds = creds ?? await getAvitoCredentials();
+  const { accountId } = resolvedCreds;
 
   try {
     return await avitoFetch(
-      `/messenger/v3/accounts/${accountId}/chats/${chatId}/messages${q ? `?${q}` : ""}`
+      `/messenger/v3/accounts/${accountId}/chats/${chatId}/messages${q ? `?${q}` : ""}`,
+      undefined, true, resolvedCreds
     );
   } catch {
     try {
       return await avitoFetch(
-        `/messenger/v2/accounts/${accountId}/chats/${chatId}/messages${q ? `?${q}` : ""}`
+        `/messenger/v2/accounts/${accountId}/chats/${chatId}/messages${q ? `?${q}` : ""}`,
+        undefined, true, resolvedCreds
       );
     } catch {
       return avitoFetch(
-        `/messenger/v1/accounts/${accountId}/chats/${chatId}/messages${q ? `?${q}` : ""}`
+        `/messenger/v1/accounts/${accountId}/chats/${chatId}/messages${q ? `?${q}` : ""}`,
+        undefined, true, resolvedCreds
       );
     }
   }
 }
 
-export async function avitoSendTextMessage(avitoChatId: string, text: string) {
+export async function avitoSendTextMessage(avitoChatId: string, text: string, creds?: AvitoCredentials) {
   const chatId = encodePathSegmentStrict(avitoChatId);
-  const { accountId } = await getAvitoCredentials();
+  const resolvedCreds = creds ?? await getAvitoCredentials();
+  const { accountId } = resolvedCreds;
 
   const body = { type: "text", message: { text } };
 
@@ -241,21 +300,22 @@ export async function avitoSendTextMessage(avitoChatId: string, text: string) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  });
+  }, true, resolvedCreds);
 }
 
 /**
  * ✅ Объявление по item_id: GET /core/v1/accounts/{user_id}/items/{item_id}/
  * (эндпоинт встречается в публичных спецификациях/SDK). :contentReference[oaicite:2]{index=2}
  */
-export async function avitoGetItemInfo(itemId: number): Promise<{
+export async function avitoGetItemInfo(itemId: number, creds?: AvitoCredentials): Promise<{
   itemId: number;
   title: string | null;
   price: number | null;
   url: string | null;
   raw: any;
 }> {
-  const { accountId } = await getAvitoCredentials();
+  const resolvedCreds = creds ?? await getAvitoCredentials();
+  const { accountId } = resolvedCreds;
 
   const paths = [
     `/core/v1/accounts/${accountId}/items/${itemId}/`,
@@ -266,7 +326,7 @@ export async function avitoGetItemInfo(itemId: number): Promise<{
 
   for (const path of paths) {
     try {
-      const j: any = await avitoFetch(path);
+      const j: any = await avitoFetch(path, undefined, true, resolvedCreds);
 
       const title =
         (typeof j?.title === "string" ? j.title : null) ??
@@ -311,7 +371,7 @@ export async function avitoListItems(params?: {
   status?: string; // например "active" или "active,old"
   category?: number;
   updatedAtFrom?: string; // "YYYY-MM-DD"
-}): Promise<{ resources: AvitoItemsListResource[]; raw: any }> {
+}, creds?: AvitoCredentials): Promise<{ resources: AvitoItemsListResource[]; raw: any }> {
   const qs = new URLSearchParams();
   qs.set("per_page", String(params?.perPage ?? 100));
   qs.set("page", String(params?.page ?? 1));
@@ -320,8 +380,9 @@ export async function avitoListItems(params?: {
   if (typeof params?.category === "number") qs.set("category", String(params.category));
   if (params?.updatedAtFrom) qs.set("updatedAtFrom", params.updatedAtFrom);
 
+  const resolvedCreds = creds ?? await getAvitoCredentials();
   const path = `/core/v1/items?${qs.toString()}`;
-  const j: any = await avitoFetch(path);
+  const j: any = await avitoFetch(path, undefined, true, resolvedCreds);
 
   const arr: any[] = Array.isArray(j?.resources) ? j.resources : [];
   const resources: AvitoItemsListResource[] = arr
@@ -347,7 +408,7 @@ export async function avitoFetchAllItemsMap(opts?: {
   status?: string; // default "active,old"
   perPage?: number; // default 100
   maxPages?: number; // safety
-}): Promise<Map<number, AvitoItemsListResource>> {
+}, creds?: AvitoCredentials): Promise<Map<number, AvitoItemsListResource>> {
   const perPage = Math.max(1, Math.min(100, opts?.perPage ?? 100));
   const status = opts?.status ?? "active,old";
   const maxPages = opts?.maxPages ?? 50;
@@ -355,7 +416,7 @@ export async function avitoFetchAllItemsMap(opts?: {
   const map = new Map<number, AvitoItemsListResource>();
 
   for (let page = 1; page <= maxPages; page++) {
-    const { resources } = await avitoListItems({ perPage, page, status });
+    const { resources } = await avitoListItems({ perPage, page, status }, creds);
     for (const r of resources) map.set(r.itemId, r);
 
     // если страница неполная — дальше смысла нет
@@ -383,9 +444,10 @@ export async function avitoGetItemFromItemsListCached(
   return ITEMS_CACHE?.map.get(itemId) ?? null;
 }
 
-export async function avitoMarkChatRead(avitoChatId: string, lastMessageId?: string) {
+export async function avitoMarkChatRead(avitoChatId: string, lastMessageId?: string, creds?: AvitoCredentials) {
   const chatId = encodePathSegmentStrict(avitoChatId);
-  const { accountId } = await getAvitoCredentials();
+  const resolvedCreds = creds ?? await getAvitoCredentials();
+  const { accountId } = resolvedCreds;
 
   const bodies: Array<any> = [
     undefined,
@@ -414,7 +476,7 @@ export async function avitoMarkChatRead(avitoChatId: string, lastMessageId?: str
             method,
             headers: body ? { "Content-Type": "application/json" } : undefined,
             body: body ? JSON.stringify(body) : undefined,
-          });
+          }, true, resolvedCreds);
           return;
         } catch (e: any) {
           lastErr = e;
@@ -447,9 +509,10 @@ export type AvitoWebhookSubscription = {
  *
  * Документация: https://developers.avito.ru/api-catalog/messenger
  */
-export async function avitoSubscribeWebhook(webhookUrl: string): Promise<AvitoWebhookSubscription> {
+export async function avitoSubscribeWebhook(webhookUrl: string, creds?: AvitoCredentials): Promise<AvitoWebhookSubscription> {
+  const resolvedCreds = creds ?? await getAvitoCredentials();
   // secret — это client_secret из OAuth-конфигурации
-  const { clientSecret: secret } = await getAvitoCredentials();
+  const { clientSecret: secret } = resolvedCreds;
 
   const body = JSON.stringify({ url: webhookUrl, secret });
   const headers = { "Content-Type": "application/json" };
@@ -465,7 +528,7 @@ export async function avitoSubscribeWebhook(webhookUrl: string): Promise<AvitoWe
 
   for (const ep of endpoints) {
     try {
-      const resp: any = await avitoFetch(ep, { method: "POST", headers, body });
+      const resp: any = await avitoFetch(ep, { method: "POST", headers, body }, true, resolvedCreds);
       console.log(`[Avito] Webhook subscribed via ${ep}:`, JSON.stringify(resp).slice(0, 200));
       return {
         id: resp?.id ?? resp?.subscription_id ?? undefined,
@@ -488,7 +551,8 @@ export async function avitoSubscribeWebhook(webhookUrl: string): Promise<AvitoWe
  *
  * DELETE /messenger/v3/webhook или POST /messenger/v3/webhook с пустым url.
  */
-export async function avitoUnsubscribeWebhook(): Promise<void> {
+export async function avitoUnsubscribeWebhook(creds?: AvitoCredentials): Promise<void> {
+  const resolvedCreds = creds ?? await getAvitoCredentials();
   const endpoints = [
     "/messenger/v3/webhook",
     "/messenger/v1/subscriptions",
@@ -498,7 +562,7 @@ export async function avitoUnsubscribeWebhook(): Promise<void> {
 
   for (const ep of endpoints) {
     try {
-      await avitoFetch(ep, { method: "DELETE" });
+      await avitoFetch(ep, { method: "DELETE" }, true, resolvedCreds);
       console.log(`[Avito] Webhook unsubscribed via ${ep}`);
       return;
     } catch (e: any) {
@@ -513,7 +577,7 @@ export async function avitoUnsubscribeWebhook(): Promise<void> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: "" }),
-    });
+    }, true, resolvedCreds);
     console.log("[Avito] Webhook unsubscribed via POST empty url");
     return;
   } catch (e: any) {
@@ -531,7 +595,8 @@ export async function avitoUnsubscribeWebhook(): Promise<void> {
  * GET /messenger/v1/subscriptions — возвращает установленный вебхук.
  * GET /messenger/v3/webhook — альтернатива.
  */
-export async function avitoGetWebhookSubscriptions(): Promise<AvitoWebhookSubscription[]> {
+export async function avitoGetWebhookSubscriptions(creds?: AvitoCredentials): Promise<AvitoWebhookSubscription[]> {
+  const resolvedCreds = creds ?? await getAvitoCredentials();
   const endpoints = [
     "/messenger/v1/subscriptions",
     "/messenger/v3/webhook",
@@ -541,7 +606,7 @@ export async function avitoGetWebhookSubscriptions(): Promise<AvitoWebhookSubscr
 
   for (const ep of endpoints) {
     try {
-      const resp: any = await avitoFetch(ep, { method: "GET" });
+      const resp: any = await avitoFetch(ep, { method: "GET" }, true, resolvedCreds);
 
       // Нормализуем ответ в массив
       const items: any[] = Array.isArray(resp?.subscriptions)

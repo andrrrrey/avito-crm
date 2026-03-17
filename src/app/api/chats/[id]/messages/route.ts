@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { avitoListMessages, getAvitoCredentials } from "@/lib/avito";
+import { avitoListMessages, getAvitoCredentialsByAccountId } from "@/lib/avito";
 import { pickFirstString, pickFirstNumber } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -52,7 +52,7 @@ async function readFromDb(chatId: string) {
   }));
 }
 
-async function refreshFromAvito(chat: { id: string; avitoChatId: string | null; unreadCount: number; raw: any }) {
+async function refreshFromAvito(chat: { id: string; avitoChatId: string | null; unreadCount: number; raw: any; accountId: number }) {
   if (env.MOCK_MODE) {
     return { ok: true as const, refreshed: false, messages: await readFromDb(chat.id) };
   }
@@ -90,6 +90,8 @@ async function refreshFromAvito(chat: { id: string; avitoChatId: string | null; 
     return [];
   };
 
+  const chatCreds = await getAvitoCredentialsByAccountId(chat.accountId);
+
   const LIMIT = 100;
   const MAX_PAGES = 20; // 20*100 = до 2000 сообщений за один refresh
   let offset = 0;
@@ -99,7 +101,7 @@ async function refreshFromAvito(chat: { id: string; avitoChatId: string | null; 
 
   try {
     while (pages < MAX_PAGES) {
-      const resp = await avitoListMessages(chat.avitoChatId, { limit: LIMIT, offset });
+      const resp = await avitoListMessages(chat.avitoChatId, { limit: LIMIT, offset }, chatCreds);
       const batch = extractMessagesArray(resp);
 
       if (!batch.length) break;
@@ -118,7 +120,7 @@ async function refreshFromAvito(chat: { id: string; avitoChatId: string | null; 
 
   const now = new Date();
 
-  const myId = await getAvitoCredentials().then((c) => c.accountId).catch(() => Number(env.AVITO_ACCOUNT_ID));
+  const myId = chatCreds.accountId;
 
   const mapped = avitoMessages
     .map((m: any) => {
@@ -231,7 +233,7 @@ export async function GET(req: Request, ctx: Ctx) {
 
   const chat = await prisma.chat.findUnique({
     where: { id },
-    select: { id: true, avitoChatId: true, unreadCount: true, raw: true },
+    select: { id: true, avitoChatId: true, unreadCount: true, raw: true, accountId: true },
   });
   if (!chat) return NextResponse.json({ ok: false, error: "chat_not_found" }, { status: 404 });
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth";
+import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,8 +13,10 @@ function clampInt(raw: string | null, def: number, min: number, max: number) {
 }
 
 export async function GET(req: Request) {
-  const guard = await requireAuth(req);
-  if (guard) return guard;
+  const sessionUser = await getSessionUser(req);
+  if (!sessionUser) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
 
   const url = new URL(req.url);
 
@@ -34,7 +37,20 @@ export async function GET(req: Request) {
   // По умолчанию берем побольше, потому что у тебя уже >1000 чатов.
   const take = clampInt(url.searchParams.get("limit"), 2000, 1, 5000);
 
+  // Фильтруем чаты по Avito-аккаунту текущего пользователя
+  const dbUser = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+    select: { avitoAccountId: true },
+  });
+
   const where: any = {};
+
+  if (dbUser?.avitoAccountId) {
+    where.accountId = dbUser.avitoAccountId;
+  } else if (env.AVITO_ACCOUNT_ID) {
+    where.accountId = env.AVITO_ACCOUNT_ID;
+  }
+
   if (status === "BOT" || status === "MANAGER" || status === "INACTIVE") {
     where.status = status;
   }

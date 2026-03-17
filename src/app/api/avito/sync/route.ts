@@ -1,9 +1,9 @@
 // src/app/api/avito/sync/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuthOrCron } from "@/lib/auth";
+import { requireAuthOrCron, getSessionUser } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { avitoListChats, avitoGetItemInfo, getAvitoCredentials } from "@/lib/avito";
+import { avitoListChats, avitoGetItemInfo, getAvitoCredentials, type AvitoCredentials } from "@/lib/avito";
 import { pickFirstString, pickFirstNumber } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -378,8 +378,10 @@ export async function POST(req: Request) {
   const itemCache = new Map<number, { title: string | null; price: number | null; url: string | null }>();
   const MAX_ITEM_LOOKUPS = 120; // чтобы не улететь по лимитам
 
-  // Получаем реальный accountId (из env или из БД — личный кабинет)
-  const { accountId: myAccountId } = await getAvitoCredentials();
+  // Получаем credentials текущего пользователя (если авторизован), иначе первый из БД
+  const sessionUser = await getSessionUser(req);
+  const creds: AvitoCredentials = await getAvitoCredentials(sessionUser?.id);
+  const myAccountId = creds.accountId;
 
   while (pages < MAX_PAGES) {
     if (offset > MAX_OFFSET) break;
@@ -387,7 +389,7 @@ export async function POST(req: Request) {
     let resp: any;
 
     try {
-      resp = await avitoListChats({ limit, offset });
+      resp = await avitoListChats({ limit, offset }, creds);
     } catch (e: any) {
       const msg = String(e?.message ?? e);
 
@@ -489,7 +491,7 @@ export async function POST(req: Request) {
             let info = itemCache.get(itemId);
 
             if (!info) {
-              const r: any = await avitoGetItemInfo(itemId);
+              const r: any = await avitoGetItemInfo(itemId, creds);
 
               // поддерживаем и "нормализованный" ответ, и сырой
               const normTitle = (typeof r?.title === "string" && r.title.trim()) ? r.title.trim() : extractTitleFromItemInfo(r);
