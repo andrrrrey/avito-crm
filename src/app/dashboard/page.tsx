@@ -119,6 +119,18 @@ export default function DashboardPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
+  // Admin-only: global AI instructions
+  const [adminInstructions, setAdminInstructions] = useState("");
+  const [adminEscalatePrompt, setAdminEscalatePrompt] = useState("");
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [adminSaveMsg, setAdminSaveMsg] = useState<string | null>(null);
+
+  // Admin-only: Vector Store files
+  const [vsUploading, setVsUploading] = useState(false);
+  const [vsDeletingId, setVsDeletingId] = useState<string | null>(null);
+  const [vsFileError, setVsFileError] = useState<string | null>(null);
+  const vsFileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (!settings) return;
     setAvitoClientId(settings.avitoClientId ?? "");
@@ -278,12 +290,6 @@ export default function DashboardPage() {
   const [kbFileError, setKbFileError] = useState<string | null>(null);
   const kbFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Admin-only: global AI instructions
-  const [adminInstructions, setAdminInstructions] = useState("");
-  const [adminEscalatePrompt, setAdminEscalatePrompt] = useState("");
-  const [adminSaving, setAdminSaving] = useState(false);
-  const [adminSaveMsg, setAdminSaveMsg] = useState<string | null>(null);
-
   // Admin-only: Vector Store files
   const hasVectorStore = !!(
     isAdmin &&
@@ -300,10 +306,6 @@ export default function DashboardPage() {
     fetcher,
   );
   const vsFiles = vsFilesData?.ok ? vsFilesData.files : [];
-  const [vsUploading, setVsUploading] = useState(false);
-  const [vsDeletingId, setVsDeletingId] = useState<string | null>(null);
-  const [vsFileError, setVsFileError] = useState<string | null>(null);
-  const vsFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleKbUpload = useCallback(async () => {
     const file = kbFileInputRef.current?.files?.[0];
