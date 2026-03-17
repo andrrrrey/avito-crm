@@ -114,6 +114,8 @@ export default function DashboardPage() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [generatingInstructions, setGeneratingInstructions] = useState(false);
+  const [generateMsg, setGenerateMsg] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -165,6 +167,26 @@ export default function DashboardPage() {
     avitoClientId, avitoClientSecret, avitoClientSecretTouched,
     avitoAccountId, aiEnabled, aiInstructions, aiEscalatePrompt, followupEnabled, mutateSettings,
   ]);
+
+  const generateInstructions = useCallback(async () => {
+    setGeneratingInstructions(true);
+    setGenerateMsg(null);
+    try {
+      const r = await apiFetch("/api/user/generate-instructions", { method: "POST" });
+      const j = await r.json();
+      if (j.ok) {
+        setAiInstructions(j.instructions ?? "");
+        if (j.escalatePrompt) setAiEscalatePrompt(j.escalatePrompt);
+        setGenerateMsg(`Готово: сгенерировано по ${j.listingsCount} объявлениям. Нажмите «Сохранить» чтобы применить.`);
+      } else {
+        setGenerateMsg("Ошибка: " + (j.error || "неизвестная"));
+      }
+    } catch {
+      setGenerateMsg("Ошибка сети");
+    } finally {
+      setGeneratingInstructions(false);
+    }
+  }, []);
 
   const syncChats = useCallback(async () => {
     setSyncing(true);
@@ -486,11 +508,31 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Персональные инструкции для ИИ */}
-                <h3 className="text-sm font-semibold text-zinc-700 mb-1 font-geist">Инструкция для ИИ-ассистента</h3>
+                <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
+                  <h3 className="text-sm font-semibold text-zinc-700 font-geist">Инструкция для ИИ-ассистента</h3>
+                  <button
+                    onClick={generateInstructions}
+                    disabled={generatingInstructions}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm disabled:opacity-50 hover:bg-violet-700 transition-colors shrink-0"
+                  >
+                    <IconSparkles className="h-3.5 w-3.5" />
+                    {generatingInstructions ? "Генерация..." : "Сгенерировать из моих объявлений"}
+                  </button>
+                </div>
                 <p className="text-sm text-zinc-500 mb-3">
                   Персональная инструкция для ИИ при обработке ваших чатов. Если не задана — используется
                   глобальная инструкция администратора.
                 </p>
+                {generateMsg && (
+                  <div className={[
+                    "mb-3 rounded-xl px-3 py-2 text-sm ring-1",
+                    generateMsg.startsWith("Готово")
+                      ? "bg-emerald-50 text-emerald-700 ring-emerald-700/10"
+                      : "bg-rose-50 text-rose-700 ring-rose-700/10",
+                  ].join(" ")}>
+                    {generateMsg}
+                  </div>
+                )}
 
                 <textarea
                   rows={6}
