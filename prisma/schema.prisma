@@ -118,6 +118,7 @@ model User {
   avitoAccountId    Int?
 
   // Per-user AI settings (override global defaults)
+  aiEnabled        Boolean @default(true)   // выключить ИИ для чатов этого пользователя
   aiInstructions   String?
   aiEscalatePrompt String?
 

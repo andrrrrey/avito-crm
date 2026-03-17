@@ -51,6 +51,7 @@ async function getUserSettingsByAccountId(accountId: number) {
     where: { avitoAccountId: accountId },
     select: {
       id: true,
+      aiEnabled: true,
       aiInstructions: true,
       aiEscalatePrompt: true,
     },
@@ -85,6 +86,12 @@ export async function getAssistantReply(
     ? await getUserSettingsByAccountId(chat.accountId)
     : null;
 
+  // Проверяем, не выключен ли ИИ для этого пользователя
+  if (userSettings && userSettings.aiEnabled === false) {
+    console.log(`[AI] Skip: AI disabled by user ${userSettings.id}`);
+    return null;
+  }
+
   // Проверяем баланс до вызова AI (если billing настроен)
   if (userSettings?.id) {
     const enough = await hasEnoughBalance(userSettings.id);
@@ -107,7 +114,7 @@ async function getOpenAIReply(
   chatId: string,
   incomingText: string,
   settings: NonNullable<Awaited<ReturnType<typeof getAiSettings>>>,
-  userSettings: { id: string; aiInstructions: string | null; aiEscalatePrompt: string | null } | null,
+  userSettings: { id: string; aiEnabled: boolean; aiInstructions: string | null; aiEscalatePrompt: string | null } | null,
 ): Promise<string | null> {
   if (!settings.apiKey) {
     console.log("[AI] Skip: OpenAI API key not set");
@@ -244,7 +251,7 @@ async function getDeepSeekReply(
   chatId: string,
   incomingText: string,
   settings: NonNullable<Awaited<ReturnType<typeof getAiSettings>>>,
-  userSettings: { id: string; aiInstructions: string | null; aiEscalatePrompt: string | null } | null,
+  userSettings: { id: string; aiEnabled: boolean; aiInstructions: string | null; aiEscalatePrompt: string | null } | null,
 ): Promise<string | null> {
   if (!settings.deepseekApiKey) {
     console.log("[AI] Skip: DeepSeek API key not set");

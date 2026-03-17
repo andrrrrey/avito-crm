@@ -51,6 +51,7 @@ type UserSettings = {
   avitoClientId: string;
   hasAvitoClientSecret: boolean;
   avitoAccountId: number | null;
+  aiEnabled: boolean;
   aiInstructions: string;
   aiEscalatePrompt: string;
   followupEnabled: boolean;
@@ -110,6 +111,7 @@ export default function DashboardPage() {
   const [avitoClientSecret, setAvitoClientSecret] = useState("");
   const [avitoClientSecretTouched, setAvitoClientSecretTouched] = useState(false);
   const [avitoAccountId, setAvitoAccountId] = useState("");
+  const [aiEnabled, setAiEnabled] = useState(true);
   const [aiInstructions, setAiInstructions] = useState("");
   const [aiEscalatePrompt, setAiEscalatePrompt] = useState("");
   const [followupEnabled, setFollowupEnabled] = useState(true);
@@ -152,6 +154,7 @@ export default function DashboardPage() {
     if (!settings) return;
     setAvitoClientId(settings.avitoClientId ?? "");
     setAvitoAccountId(settings.avitoAccountId ? String(settings.avitoAccountId) : "");
+    setAiEnabled(settings.aiEnabled ?? true);
     setAiInstructions(settings.aiInstructions ?? "");
     setAiEscalatePrompt(settings.aiEscalatePrompt ?? "");
     setFollowupEnabled(settings.followupEnabled ?? true);
@@ -172,6 +175,7 @@ export default function DashboardPage() {
       const payload: Record<string, unknown> = {
         avitoClientId,
         avitoAccountId: avitoAccountId ? Number(avitoAccountId) : null,
+        aiEnabled,
         aiInstructions,
         aiEscalatePrompt,
         followupEnabled,
@@ -199,7 +203,7 @@ export default function DashboardPage() {
     }
   }, [
     avitoClientId, avitoClientSecret, avitoClientSecretTouched,
-    avitoAccountId, aiInstructions, aiEscalatePrompt, followupEnabled, mutateSettings,
+    avitoAccountId, aiEnabled, aiInstructions, aiEscalatePrompt, followupEnabled, mutateSettings,
   ]);
 
   const syncChats = useCallback(async () => {
@@ -533,10 +537,43 @@ export default function DashboardPage() {
                 </div>
               </section>
 
-              {/* ── Инструкция для ИИ ── */}
-              {!isAdmin && <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
-                <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">Инструкция для ИИ-ассистента</h2>
+              {/* ── ИИ-ассистент (вкл/выкл + инструкции) ── */}
+              <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+                <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">ИИ-ассистент</h2>
                 <p className="text-sm text-zinc-500 mb-4">
+                  Управление ИИ-ассистентом для ваших чатов.
+                </p>
+
+                {/* Переключатель вкл/выкл ИИ */}
+                <div className="flex items-center justify-between py-3 border-b border-zinc-200 mb-4">
+                  <div>
+                    <div className="text-sm font-medium text-zinc-700">ИИ-ассистент включён</div>
+                    <div className="text-xs text-zinc-500">
+                      Когда выключено, ИИ не будет отвечать ни в одном из ваших чатов
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={aiEnabled}
+                    onClick={() => setAiEnabled((v) => !v)}
+                    className={[
+                      "relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200",
+                      aiEnabled ? "bg-sky-600" : "bg-zinc-300",
+                    ].join(" ")}
+                  >
+                    <span
+                      className={[
+                        "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200",
+                        aiEnabled ? "translate-x-5" : "translate-x-0",
+                      ].join(" ")}
+                    />
+                  </button>
+                </div>
+
+                {/* Персональные инструкции для ИИ */}
+                <h3 className="text-sm font-semibold text-zinc-700 mb-1 font-geist">Инструкция для ИИ-ассистента</h3>
+                <p className="text-sm text-zinc-500 mb-3">
                   Персональная инструкция для ИИ при обработке ваших чатов. Если не задана — используется
                   глобальная инструкция администратора.
                 </p>
@@ -579,7 +616,7 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </div>
-              </section>}
+              </section>
 
               {/* ── Дожим бота ── */}
               <section className="mt-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
@@ -628,14 +665,14 @@ export default function DashboardPage() {
                 </div>
               </section>
 
-              {/* ── Инструкция для ассистента (только для admin) ── */}
+              {/* ── Глобальная инструкция для ассистента (только для admin) ── */}
               {isAdmin && (
                 <section className={`mt-6 ${aiSettings?.provider !== "openai" ? "mb-6" : ""} rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10`}>
                   <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">
-                    Инструкция для ассистента
+                    Глобальная инструкция для ассистента
                   </h2>
                   <p className="text-sm text-zinc-500 mb-4">
-                    Глобальная инструкция для ИИ-ассистента. Применяется ко всем пользователям, если у них не задана персональная инструкция.
+                    Применяется ко всем пользователям, у которых не задана персональная инструкция.
                   </p>
 
                   <textarea
@@ -773,7 +810,7 @@ export default function DashboardPage() {
               )}
 
               {/* ── База знаний ── */}
-              {!isAdmin && <section className="mt-6 mb-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
+              <section className="mt-6 mb-6 rounded-2xl bg-zinc-200/80 p-6 shadow-sm ring-1 ring-zinc-900/10">
                 <h2 className="text-lg font-semibold text-zinc-900 mb-1 font-geist">База знаний</h2>
                 <p className="text-sm text-zinc-500 mb-4">
                   Загрузите файлы с информацией о ваших товарах, услугах или FAQ. ИИ будет использовать
@@ -859,7 +896,7 @@ export default function DashboardPage() {
                     </table>
                   </div>
                 )}
-              </section>}
+              </section>
 
             </div>
           </div>
