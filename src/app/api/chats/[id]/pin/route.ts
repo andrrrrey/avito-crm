@@ -30,8 +30,8 @@ export async function POST(req: Request, ctx: Ctx) {
     select: { pinned: true },
   });
 
-  publish({ type: "chat_pinned", chatId: chat.id, avitoChatId: chat.avitoChatId });
-  publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+  publish({ type: "chat_pinned", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
+  publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
 
   return NextResponse.json({ ok: true, pinned: updated.pinned });
 }

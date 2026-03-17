@@ -142,6 +142,7 @@ export async function POST(req: Request) {
     type: "message_created",
     chatId: chat.id,
     avitoChatId: chat.avitoChatId,
+    accountId: chat.accountId,
     messageId: created.inMsg.id,
     direction: "IN",
     message: {
@@ -159,6 +160,7 @@ export async function POST(req: Request) {
       type: "message_created",
       chatId: chat.id,
       avitoChatId: chat.avitoChatId,
+      accountId: chat.accountId,
       messageId: created.outMsg.id,
       direction: "OUT",
       message: {
@@ -173,10 +175,10 @@ export async function POST(req: Request) {
   }
 
   if (created.outMsg) {
-    publish({ type: "chat_read", chatId: chat.id, avitoChatId: chat.avitoChatId });
+    publish({ type: "chat_read", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
   }
 
-  publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId });
+  publish({ type: "chat_updated", chatId: chat.id, avitoChatId: chat.avitoChatId, accountId: chat.accountId });
 
   return NextResponse.json({ ok: true, chatId: chat.id, avitoChatId: chat.avitoChatId });
 }

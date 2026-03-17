@@ -54,7 +54,7 @@ async function publishChatSnapshot(chatId: string, avitoChatId: string) {
     select: {
       id: true, status: true, customerName: true, itemTitle: true, price: true,
       lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,
-      unreadCount: true, pinned: true,
+      unreadCount: true, pinned: true, accountId: true,
     },
   });
 
@@ -62,6 +62,7 @@ async function publishChatSnapshot(chatId: string, avitoChatId: string) {
     type: "chat_updated",
     chatId,
     avitoChatId,
+    accountId: snap?.accountId,
     chatSnapshot: snap ? {
       id: snap.id,
       status: snap.status as any,
@@ -132,6 +133,7 @@ export async function POST(req: Request) {
     select: {
       id: true,
       avitoChatId: true,
+      accountId: true,
       lastMessageAt: true,
       raw: true,
       messages: {
@@ -227,6 +229,7 @@ export async function POST(req: Request) {
           type: "message_created",
           chatId: chat.id,
           avitoChatId: chat.avitoChatId,
+          accountId: chat.accountId,
           direction: "OUT",
           message: {
             id: fakeId,

@@ -103,6 +103,7 @@ export async function POST(req: Request) {
       chatUrl: true,
       unreadCount: true,
       pinned: true,
+      accountId: true,
     },
   });
 
@@ -154,6 +155,7 @@ export async function POST(req: Request) {
         type: "chat_updated",
         chatId: chat.id,
         avitoChatId: chat.avitoChatId,
+        accountId: chat.accountId,
         chatSnapshot: {
           id: chat.id,
           status: chat.status as any,
