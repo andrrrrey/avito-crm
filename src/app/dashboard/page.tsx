@@ -103,6 +103,8 @@ export default function DashboardPage() {
   const [followupEnabled, setFollowupEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!settings) return;
@@ -151,6 +153,25 @@ export default function DashboardPage() {
     avitoClientId, avitoClientSecret, avitoClientSecretTouched,
     avitoAccountId, aiInstructions, aiEscalatePrompt, followupEnabled, mutateSettings,
   ]);
+
+  const syncChats = useCallback(async () => {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const r = await apiFetch("/api/avito/sync?fillPrices=1", { method: "POST" });
+      const j = await r.json();
+      if (j.ok) {
+        const { chatsUpserted, totalChatsFetched } = j.stats ?? {};
+        setSyncMsg(`Готово: загружено ${totalChatsFetched ?? 0}, обновлено ${chatsUpserted ?? 0} чатов`);
+      } else {
+        setSyncMsg("Ошибка: " + (j.error || "неизвестная"));
+      }
+    } catch {
+      setSyncMsg("Ошибка сети");
+    } finally {
+      setSyncing(false);
+    }
+  }, []);
 
   // Knowledge base
   const hasDeepseek = aiSettings?.provider === "deepseek" && aiSettings?.hasDeepseekApiKey;
@@ -358,7 +379,7 @@ export default function DashboardPage() {
                   </span>
                 </label>
 
-                <div className="mt-5 flex items-center gap-3">
+                <div className="mt-5 flex flex-wrap items-center gap-3">
                   <button
                     onClick={saveSettings}
                     disabled={saving}
@@ -366,9 +387,21 @@ export default function DashboardPage() {
                   >
                     {saving ? "Сохранение..." : "Сохранить"}
                   </button>
+                  <button
+                    onClick={syncChats}
+                    disabled={syncing}
+                    className="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50 hover:bg-emerald-700 transition-colors"
+                  >
+                    {syncing ? "Синхронизация..." : "Синхронизировать чаты"}
+                  </button>
                   {saveMsg && (
                     <span className={saveMsg === "Сохранено" ? "text-sm text-emerald-600" : "text-sm text-rose-600"}>
                       {saveMsg}
+                    </span>
+                  )}
+                  {syncMsg && (
+                    <span className={syncMsg.startsWith("Готово") ? "text-sm text-emerald-600" : "text-sm text-rose-600"}>
+                      {syncMsg}
                     </span>
                   )}
                 </div>
