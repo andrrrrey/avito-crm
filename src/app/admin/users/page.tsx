@@ -87,6 +87,27 @@ export default function AdminUsersPage() {
   );
 
   const isAdmin = meData?.user?.role === "ADMIN";
+
+  const [migrating, setMigrating] = useState(false);
+  const [migrateResult, setMigrateResult] = useState<string | null>(null);
+
+  const runMigration = useCallback(async () => {
+    setMigrating(true);
+    setMigrateResult(null);
+    try {
+      const r = await apiFetch("/api/admin/migrate/fix-chat-accounts", { method: "POST" });
+      const j = await r.json();
+      if (j.ok) {
+        setMigrateResult(`Готово: переназначено ${j.totalUpdated} чатов`);
+      } else {
+        setMigrateResult("Ошибка: " + (j.error || "неизвестная"));
+      }
+    } catch {
+      setMigrateResult("Ошибка сети");
+    } finally {
+      setMigrating(false);
+    }
+  }, []);
   const data = usersData?.data;
 
   // Balance modal
@@ -233,6 +254,19 @@ export default function AdminUsersPage() {
               </span>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <button
+                onClick={runMigration}
+                disabled={migrating}
+                title="Переназначить accountId у чатов по данным Avito API для каждого пользователя"
+                className={`px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full transition font-geist whitespace-nowrap ${migrating ? "opacity-50 pointer-events-none bg-amber-100 text-amber-700" : "bg-amber-100 text-amber-700 hover:bg-amber-200"}`}
+              >
+                {migrating ? "Миграция..." : "Исправить чаты"}
+              </button>
+              {migrateResult && (
+                <span className={`text-[10px] font-geist ${migrateResult.startsWith("Готово") ? "text-emerald-600" : "text-rose-600"}`}>
+                  {migrateResult}
+                </span>
+              )}
               <button
                 onClick={() => router.push("/")}
                 className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-zinc-100 hover:bg-zinc-200 transition font-geist whitespace-nowrap"
