@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
-import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,7 +42,7 @@ export async function GET(req: Request) {
     select: { avitoAccountId: true },
   });
 
-  const accountId = dbUser?.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null;
+  const accountId = dbUser?.avitoAccountId ?? null;
 
   // Если аккаунт не определён — не показываем чужие чаты
   if (accountId === null) {

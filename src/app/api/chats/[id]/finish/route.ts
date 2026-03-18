@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
-import { env } from "@/lib/env";
 import { publish } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -17,7 +16,7 @@ export async function POST(req: Request, ctx: Ctx) {
     where: { id: sessionUser.id },
     select: { avitoAccountId: true },
   });
-  const accountId = dbUser?.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null;
+  const accountId = dbUser?.avitoAccountId ?? null;
   if (accountId === null) return NextResponse.json({ ok: false }, { status: 404 });
 
   const { id } = await ctx.params;
