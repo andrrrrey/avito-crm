@@ -23,7 +23,7 @@ export async function POST(req: Request, ctx: Ctx) {
     where: { id: sessionUser.id },
     select: { avitoAccountId: true },
   });
-  const accountId = dbUser?.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null;
+  const accountId = dbUser?.avitoAccountId ?? null;
   if (accountId === null) return jsonError(404, "chat_not_found");
 
   const { id } = await ctx.params;

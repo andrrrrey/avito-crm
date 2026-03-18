@@ -1,6 +1,5 @@
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { env } from "@/lib/env";
 import { makeEvent, subscribe, subscribeChat, type CRMRealtimeEvent } from "@/lib/realtime";
 import { NextResponse } from "next/server";
 
@@ -22,7 +21,7 @@ export async function GET(req: Request) {
     where: { id: sessionUser.id },
     select: { avitoAccountId: true },
   });
-  const userAccountId = dbUser?.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null;
+  const userAccountId = dbUser?.avitoAccountId ?? null;
 
   const url = new URL(req.url);
   const chatId = (url.searchParams.get("chatId") || "").trim() || null;
