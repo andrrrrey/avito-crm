@@ -1,7 +1,7 @@
 // src/app/api/chats/[id]/messages/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { avitoListMessages, getAvitoCredentialsByAccountId } from "@/lib/avito";
 import { pickFirstString, pickFirstNumber } from "@/lib/utils";
@@ -224,15 +224,22 @@ async function refreshFromAvito(chat: { id: string; avitoChatId: string | null; 
 }
 
 export async function GET(req: Request, ctx: Ctx) {
-  const guard = await requireAuth(req);
-  if (guard) return guard;
+  const sessionUser = await getSessionUser(req);
+  if (!sessionUser) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+    select: { avitoAccountId: true },
+  });
+  const accountId = dbUser?.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null;
+  if (accountId === null) return NextResponse.json({ ok: false, error: "chat_not_found" }, { status: 404 });
 
   const { id } = await ctx.params;
   const url = new URL(req.url);
   const refresh = url.searchParams.get("refresh") === "1" || url.searchParams.get("source") === "avito";
 
   const chat = await prisma.chat.findUnique({
-    where: { id },
+    where: { id, accountId },
     select: { id: true, avitoChatId: true, unreadCount: true, raw: true, accountId: true },
   });
   if (!chat) return NextResponse.json({ ok: false, error: "chat_not_found" }, { status: 404 });

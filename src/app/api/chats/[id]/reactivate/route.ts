@@ -2,7 +2,8 @@
 // Возвращает INACTIVE чат обратно в BOT (реактивация сделки)
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth";
+import { env } from "@/lib/env";
 import { publish } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -11,12 +12,19 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, ctx: Ctx) {
-  const guard = await requireAuth(req);
-  if (guard) return guard;
+  const sessionUser = await getSessionUser(req);
+  if (!sessionUser) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+    select: { avitoAccountId: true },
+  });
+  const accountId = dbUser?.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null;
+  if (accountId === null) return NextResponse.json({ ok: false }, { status: 404 });
 
   const { id } = await ctx.params;
 
-  const chat = await prisma.chat.findUnique({ where: { id } });
+  const chat = await prisma.chat.findUnique({ where: { id, accountId } });
   if (!chat) return NextResponse.json({ ok: false }, { status: 404 });
 
   if (chat.status !== "INACTIVE") {

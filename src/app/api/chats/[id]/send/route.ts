@@ -1,7 +1,7 @@
 // src/app/api/chats/[id]/send/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { avitoSendTextMessage, getAvitoCredentialsByAccountId } from "@/lib/avito";
 import { publish } from "@/lib/realtime";
@@ -16,8 +16,15 @@ function jsonError(status: number, error: string, extra?: any) {
 }
 
 export async function POST(req: Request, ctx: Ctx) {
-  const guard = await requireAuth(req);
-  if (guard) return guard;
+  const sessionUser = await getSessionUser(req);
+  if (!sessionUser) return jsonError(401, "unauthorized");
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+    select: { avitoAccountId: true },
+  });
+  const accountId = dbUser?.avitoAccountId ?? env.AVITO_ACCOUNT_ID ?? null;
+  if (accountId === null) return jsonError(404, "chat_not_found");
 
   const { id } = await ctx.params;
 
@@ -29,7 +36,7 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const markRead = body.markRead === undefined ? true : Boolean(body.markRead);
 
-  const chat = await prisma.chat.findUnique({ where: { id }, select: { id: true, avitoChatId: true, accountId: true, status: true, lastMessageAt: true, lastMessageText: true } });
+  const chat = await prisma.chat.findUnique({ where: { id, accountId }, select: { id: true, avitoChatId: true, accountId: true, status: true, lastMessageAt: true, lastMessageText: true } });
   if (!chat) return jsonError(404, "chat_not_found");
 
   const now = new Date();
