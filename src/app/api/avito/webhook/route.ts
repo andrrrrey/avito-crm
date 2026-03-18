@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { publish } from "@/lib/realtime";
-import { avitoGetChatInfo, avitoSendTextMessage, avitoGetItemInfo, getAvitoCredentials } from "@/lib/avito";
+import { avitoGetChatInfo, avitoSendTextMessage, avitoGetItemInfo, getAvitoCredentials, getAvitoCredentialsByAccountId } from "@/lib/avito";
 import { pickFirstString, pickFirstNumber } from "@/lib/utils";
 import { getAssistantReply, ESCALATE_MARKER } from "@/lib/openai";
 
@@ -117,7 +117,8 @@ async function tryFillChatPrice(chatId: string, itemId: number) {
   if (cur.price !== null && cur.price !== undefined) return;
 
   try {
-    const info = await avitoGetItemInfo(itemId);
+    const chatCreds = await getAvitoCredentialsByAccountId(cur.accountId);
+    const info = await avitoGetItemInfo(itemId, chatCreds);
     const patch: any = {};
     if (info.price !== null && info.price !== undefined) patch.price = info.price;
 
@@ -290,7 +291,8 @@ async function runDevTestBotIfNeeded(args: {
       return;
     }
 
-    const resp: any = await avitoSendTextMessage(chat.avitoChatId, DEV_TEST_BOT_GREETING);
+    const devCreds = await getAvitoCredentialsByAccountId(chat.accountId);
+    const resp: any = await avitoSendTextMessage(chat.avitoChatId, DEV_TEST_BOT_GREETING, devCreds);
 
     const outId =
       pickFirstString(resp?.id, resp?.message_id, resp?.value?.id, resp?.result?.id) ?? null;
@@ -487,7 +489,8 @@ async function tryAiAssistantReply(args: {
 
   // REAL MODE — отправляем в Avito
   try {
-    const resp: any = await avitoSendTextMessage(chat.avitoChatId, replyText);
+    const chatCreds = await getAvitoCredentialsByAccountId(chat.accountId);
+    const resp: any = await avitoSendTextMessage(chat.avitoChatId, replyText, chatCreds);
     const outId = pickFirstString(
       resp?.id,
       resp?.message_id,
@@ -565,7 +568,7 @@ async function tryAiAssistantReply(args: {
   }
 }
 
-async function enrichChatFromAvitoIfMissing(chatId: string, avitoChatId: string) {
+async function enrichChatFromAvitoIfMissing(chatId: string, avitoChatId: string, accountId: number) {
   const cur = await prisma.chat.findUnique({
     where: { id: chatId },
     select: { customerName: true, itemTitle: true, adUrl: true, chatUrl: true, raw: true, price: true },
@@ -579,7 +582,8 @@ async function enrichChatFromAvitoIfMissing(chatId: string, avitoChatId: string)
 
   if (!needName && !needTitle && !needAdUrl && !needChatUrl) return;
 
-  const info = await avitoGetChatInfo(avitoChatId);
+  const chatCreds = await getAvitoCredentialsByAccountId(accountId);
+  const info = await avitoGetChatInfo(avitoChatId, chatCreds);
   const d = extractChatDetailsFromAny(info);
 
   const patch: any = {};
@@ -884,7 +888,7 @@ export async function POST(req: Request) {
 
     // ✅ Обогащение и price — fire-and-forget, не блокируем ответ вебхука
     if (!env.MOCK_MODE && res.needsEnrich && res.avitoChatId) {
-      enrichChatFromAvitoIfMissing(res.chatId, res.avitoChatId)
+      enrichChatFromAvitoIfMissing(res.chatId, res.avitoChatId, accountIdNum)
         .then(() => publish({ type: "chat_updated", chatId: res.chatId, avitoChatId: res.avitoChatId, accountId: chatAccountId }))
         .catch((e) => console.warn("[webhook] enrichChatFromAvitoIfMissing error:", e));
     }

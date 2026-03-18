@@ -45,8 +45,9 @@ export async function GET(req: Request) {
 
         // Фильтруем события по accountId — не отправляем чужие чаты.
         // Служебные события (ping/hello) всегда пропускаем.
-        if (e.type !== "ping" && e.type !== "hello" && e.accountId !== undefined && e.accountId !== null) {
-          if (userAccountId === null || e.accountId !== userAccountId) return;
+        // ВАЖНО: события без accountId тоже блокируем во избежание случайных утечек данных.
+        if (e.type !== "ping" && e.type !== "hello") {
+          if (e.accountId == null || userAccountId == null || e.accountId !== userAccountId) return;
         }
 
         controller.enqueue(encoder.encode(formatSse(e)));

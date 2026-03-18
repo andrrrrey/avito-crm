@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
-import { avitoMarkChatRead } from "@/lib/avito";
+import { avitoMarkChatRead, getAvitoCredentialsByAccountId } from "@/lib/avito";
 import { publish } from "@/lib/realtime";
 import type { Prisma } from "@prisma/client";
 
@@ -134,7 +134,8 @@ export async function POST(req: Request) {
 
   if (replied && !env.MOCK_MODE && chat.avitoChatId) {
     try {
-      await avitoMarkChatRead(chat.avitoChatId, lastInAvitoMessageId);
+      const chatCreds = await getAvitoCredentialsByAccountId(chat.accountId);
+      await avitoMarkChatRead(chat.avitoChatId, lastInAvitoMessageId, chatCreds);
     } catch {}
   }
 
