@@ -1221,7 +1221,7 @@ function PageInner() {
               </span>
             )}
 
-            {isAdmin && !IS_MOCK && (
+            {!IS_MOCK && (
               <button
                 onClick={toggleWebhookSubscription}
                 disabled={webhookLoading}
