@@ -16,17 +16,14 @@ export type AvitoCredentials = {
 /**
  * Возвращает Avito-credentials для конкретного пользователя (по userId),
  * либо из env, либо из БД (первый пользователь с заполненными ключами).
+ *
+ * Приоритет:
+ * 1. User-specific credentials из БД (если передан userId и у него есть ключи)
+ * 2. Env vars (legacy / single-user режим)
+ * 3. Первый пользователь с заполненными ключами в БД
  */
 export async function getAvitoCredentials(userId?: string): Promise<AvitoCredentials> {
-  if (env.AVITO_CLIENT_ID && env.AVITO_CLIENT_SECRET && env.AVITO_ACCOUNT_ID) {
-    return {
-      clientId: env.AVITO_CLIENT_ID,
-      clientSecret: env.AVITO_CLIENT_SECRET,
-      accountId: env.AVITO_ACCOUNT_ID,
-    };
-  }
-
-  // Если передан userId — ищем конкретного пользователя
+  // 1. Если передан userId — сначала ищем его персональные ключи
   if (userId) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -45,7 +42,16 @@ export async function getAvitoCredentials(userId?: string): Promise<AvitoCredent
     }
   }
 
-  // Fallback: первый пользователь с заполненными ключами
+  // 2. Fallback на env vars (single-user / legacy)
+  if (env.AVITO_CLIENT_ID && env.AVITO_CLIENT_SECRET && env.AVITO_ACCOUNT_ID) {
+    return {
+      clientId: env.AVITO_CLIENT_ID,
+      clientSecret: env.AVITO_CLIENT_SECRET,
+      accountId: env.AVITO_ACCOUNT_ID,
+    };
+  }
+
+  // 3. Fallback: первый пользователь с заполненными ключами
   const user = await prisma.user.findFirst({
     where: {
       avitoClientId: { not: null },
