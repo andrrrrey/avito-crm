@@ -1254,6 +1254,12 @@ function PageInner() {
 
             {/* Nav links */}
             <a
+              href="/analytics"
+              className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-zinc-100 hover:bg-zinc-200 transition font-geist whitespace-nowrap"
+            >
+              Аналитика
+            </a>
+            <a
               href="/dashboard"
               className="px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-xs font-medium rounded-full bg-zinc-100 hover:bg-zinc-200 transition font-geist whitespace-nowrap"
             >
