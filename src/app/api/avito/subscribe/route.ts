@@ -1,7 +1,7 @@
 // src/app/api/avito/subscribe/route.ts
 // Управление подпиской на вебхуки Авито для мгновенной доставки сообщений.
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, getSessionUser } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { getAiSettings } from "@/lib/openai";
 import {
@@ -30,10 +30,12 @@ let cachedWebhookState: {
   subscribedAt: null,
 };
 
-function buildWebhookUrl(): string {
+function buildWebhookUrl(accountId?: number): string {
   const base = (env.PUBLIC_BASE_URL ?? "").replace(/\/+$/, "");
   if (!base) throw new Error("PUBLIC_BASE_URL не настроен — задайте публичный URL сервера");
-  return `${base}/api/avito/webhook?key=${encodeURIComponent(env.CRM_WEBHOOK_KEY)}`;
+  const url = `${base}/api/avito/webhook?key=${encodeURIComponent(env.CRM_WEBHOOK_KEY)}`;
+  if (accountId) return `${url}&accountId=${accountId}`;
+  return url;
 }
 
 /** Диагностика конфигурации */
@@ -148,8 +150,10 @@ export async function POST(req: Request) {
   }
 
   try {
-    const webhookUrl = buildWebhookUrl();
-    const sub = await avitoSubscribeWebhook(webhookUrl);
+    const sessionUser = await getSessionUser(req);
+    const creds = await getAvitoCredentials(sessionUser?.id ?? undefined);
+    const webhookUrl = buildWebhookUrl(creds.accountId);
+    const sub = await avitoSubscribeWebhook(webhookUrl, creds);
     cachedWebhookState = { subscribed: true, webhookUrl, subscribedAt: new Date().toISOString() };
     return NextResponse.json({ ok: true, subscription: sub, webhookUrl });
   } catch (e: any) {

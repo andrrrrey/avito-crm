@@ -37,7 +37,7 @@ function toDateMaybe(v: any): Date | null {
   return null;
 }
 
-function extractChatDetailsFromAny(rootLike: any) {
+function extractChatDetailsFromAny(rootLike: any, accountId?: number) {
   const root =
     rootLike?.payload?.value ??
     rootLike?.payload ??
@@ -58,7 +58,7 @@ function extractChatDetailsFromAny(rootLike: any) {
         ? root.members
         : [];
 
-  const myId = Number(env.AVITO_ACCOUNT_ID ?? 0);
+  const myId = accountId ?? Number(env.AVITO_ACCOUNT_ID ?? 0);
   const other = users.find((u) => Number(u?.id) !== myId);
 
   const customerName =
@@ -643,12 +643,18 @@ export async function POST(req: Request) {
   }
 
   if (avitoChatId) {
-    const accountIdNum = await getAvitoCredentials().then((c) => c.accountId).catch(() => Number(env.AVITO_ACCOUNT_ID ?? 0));
+    // Читаем accountId из URL-параметра (вшивается при подписке на вебхук для каждого пользователя).
+    // Это ключевое для multi-аккаунтного режима: каждый аккаунт подписывается со своим accountId в URL.
+    const reqUrl = new URL(req.url);
+    const accountIdFromUrl = reqUrl.searchParams.get("accountId");
+    const accountIdNum = accountIdFromUrl && Number.isFinite(Number(accountIdFromUrl)) && Number(accountIdFromUrl) > 0
+      ? Number(accountIdFromUrl)
+      : await getAvitoCredentials().then((c) => c.accountId).catch(() => Number(env.AVITO_ACCOUNT_ID ?? 0));
 
     const direction =
       avitoMessageId && authorId && accountIdNum && Number(authorId) === accountIdNum ? "OUT" : "IN";
 
-    const hints = extractChatDetailsFromAny(body);
+    const hints = extractChatDetailsFromAny(body, accountIdNum);
 
     const res = await prisma.$transaction(async (tx) => {
       let chat = await tx.chat.findUnique({
