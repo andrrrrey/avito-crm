@@ -470,6 +470,7 @@ async function tryAiAssistantReply(args: {
           text: replyText,
           sentAt: sentAt.toISOString(),
           isRead: true,
+          isAi: true,
         },
       });
     }
@@ -511,6 +512,15 @@ async function tryAiAssistantReply(args: {
       skipDuplicates: true,
     });
 
+    // Если сообщение уже было сохранено вебхуком с direction=IN (race condition),
+    // исправляем direction на OUT и помечаем как AI-сообщение
+    if (ins.count === 0) {
+      await prisma.message.updateMany({
+        where: { chatId: chat.id, avitoMessageId: outId, direction: "IN" },
+        data: { direction: "OUT", raw: { from: "ai_assistant", avitoSendResp: resp ?? {} } },
+      });
+    }
+
     await prisma.chat.update({
       where: { id: chat.id },
       data: { lastMessageAt: sentAt, lastMessageText: replyText },
@@ -548,6 +558,7 @@ async function tryAiAssistantReply(args: {
           text: replyText,
           sentAt: sentAt.toISOString(),
           isRead: true,
+          isAi: true,
         },
       });
     }
@@ -651,9 +662,44 @@ export async function POST(req: Request) {
     // Это ключевое для multi-аккаунтного режима: каждый аккаунт подписывается со своим accountId в URL.
     const reqUrl = new URL(req.url);
     const accountIdFromUrl = reqUrl.searchParams.get("accountId");
-    const accountIdNum = accountIdFromUrl && Number.isFinite(Number(accountIdFromUrl)) && Number(accountIdFromUrl) > 0
-      ? Number(accountIdFromUrl)
-      : await getAvitoCredentials().then((c) => c.accountId).catch(() => Number(env.AVITO_ACCOUNT_ID ?? 0));
+
+    let accountIdNum: number;
+    if (accountIdFromUrl && Number.isFinite(Number(accountIdFromUrl)) && Number(accountIdFromUrl) > 0) {
+      // 1. Лучший вариант: accountId явно вшит в URL при подписке
+      accountIdNum = Number(accountIdFromUrl);
+    } else {
+      // 2. Если URL-параметра нет — ищем по существующему чату в БД
+      const existingChatForAccount = avitoChatId
+        ? await prisma.chat.findUnique({
+            where: { avitoChatId: String(avitoChatId) },
+            select: { accountId: true },
+          })
+        : null;
+
+      if (existingChatForAccount) {
+        // Берём accountId из уже существующего чата — он был создан корректно ранее
+        accountIdNum = existingChatForAccount.accountId;
+      } else {
+        // 3. Новый чат и нет URL-параметра: пробуем найти аккаунт по authorId (исходящие сообщения)
+        // authorId исходящего сообщения = avitoAccountId продавца
+        const authorIdNum = authorId ? Number(authorId) : NaN;
+        if (Number.isFinite(authorIdNum) && authorIdNum > 0) {
+          const userByAccount = await prisma.user.findFirst({
+            where: { avitoAccountId: authorIdNum },
+            select: { avitoAccountId: true },
+          });
+          if (userByAccount?.avitoAccountId) {
+            accountIdNum = userByAccount.avitoAccountId;
+          } else {
+            // 4. Последний fallback — первый настроенный пользователь
+            accountIdNum = await getAvitoCredentials().then((c) => c.accountId).catch(() => Number(env.AVITO_ACCOUNT_ID ?? 0));
+          }
+        } else {
+          // 4. Fallback — первый настроенный пользователь
+          accountIdNum = await getAvitoCredentials().then((c) => c.accountId).catch(() => Number(env.AVITO_ACCOUNT_ID ?? 0));
+        }
+      }
+    }
 
     const direction =
       avitoMessageId && authorId && accountIdNum && Number(authorId) === accountIdNum ? "OUT" : "IN";

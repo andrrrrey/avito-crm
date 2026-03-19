@@ -440,8 +440,19 @@ export async function POST(req: Request) {
 
         const existing = await prisma.chat.findUnique({
           where: { avitoChatId },
-          select: { id: true, pinned: true, status: true, unreadCount: true, price: true, adUrl: true, itemTitle: true },
+          select: { id: true, pinned: true, status: true, unreadCount: true, price: true, adUrl: true, itemTitle: true, accountId: true },
         });
+
+        // Защита от "кражи" чата: если чат уже принадлежит другому аккаунту — пропускаем.
+        // Это невозможно при корректной настройке Avito (у разных аккаунтов разные chatId),
+        // но возможно если пользователь случайно использует чужие учётные данные.
+        if (existing && existing.accountId !== myAccountId) {
+          errors.push({
+            avitoChatId,
+            error: `Chat belongs to accountId=${existing.accountId}, current sync accountId=${myAccountId}. Skipping to prevent data mixing.`,
+          });
+          continue;
+        }
 
         // ✅ ВАЖНО: не затираем price/title/url null-ом из messenger
         const updateData: any = {
