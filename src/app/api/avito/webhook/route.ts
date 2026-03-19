@@ -707,7 +707,8 @@ export async function POST(req: Request) {
     const hints = extractChatDetailsFromAny(body, accountIdNum);
 
     const res = await prisma.$transaction(async (tx) => {
-      let chat = await tx.chat.findUnique({
+      // Сначала читаем текущее состояние чата для построения патча
+      const existingChat = await tx.chat.findUnique({
         where: { avitoChatId: String(avitoChatId) },
         select: {
           id: true,
@@ -722,85 +723,67 @@ export async function POST(req: Request) {
         },
       });
 
-      let chatWasCreated = false;
+      // Строим патч только для полей, которые отсутствуют в существующем чате
+      const patch: any = {};
+      if (!existingChat?.customerName && hints.customerName) patch.customerName = hints.customerName;
+      if (!existingChat?.itemTitle && hints.itemTitle) patch.itemTitle = hints.itemTitle;
+      if (!existingChat?.adUrl && hints.adUrl) patch.adUrl = hints.adUrl;
+      if (!existingChat?.chatUrl && hints.chatUrl) patch.chatUrl = hints.chatUrl;
 
-      if (!chat) {
-        chatWasCreated = true;
-
-        chat = await tx.chat.create({
-          data: {
-            avitoChatId: String(avitoChatId),
-            accountId: accountIdNum,
-            status: "BOT",
-            customerName: hints.customerName,
-            itemTitle: hints.itemTitle,
-            adUrl: hints.adUrl,
-            chatUrl: hints.chatUrl,
-            raw: {
-              createdFrom: "webhook",
-              type,
-              payload: body,
-              itemId: hints.itemId ?? null,
-            },
-          },
-          select: {
-            id: true,
-            avitoChatId: true,
-            customerName: true,
-            itemTitle: true,
-            adUrl: true,
-            chatUrl: true,
-            status: true,
-            raw: true,
-            price: true,
-          },
-        });
-      } else {
-        const patch: any = {};
-        if (!chat.customerName && hints.customerName) patch.customerName = hints.customerName;
-        if (!chat.itemTitle && hints.itemTitle) patch.itemTitle = hints.itemTitle;
-        if (!chat.adUrl && hints.adUrl) patch.adUrl = hints.adUrl;
-        if (!chat.chatUrl && hints.chatUrl) patch.chatUrl = hints.chatUrl;
-
-        // itemId кладем в raw один раз
-        const prevRaw = (chat.raw && typeof chat.raw === "object") ? (chat.raw as any) : {};
-        if (hints.itemId && !prevRaw.itemId) {
-          patch.raw = { ...prevRaw, itemId: hints.itemId };
-        }
-
-        // Если клиент написал в INACTIVE чат — реактивируем в BOT
-        if (chat.status === "INACTIVE" && direction === "IN") {
-          patch.status = "BOT";
-          patch.followupSentAt = null;
-          const rawForReactivation = patch.raw ?? prevRaw;
-          patch.raw = {
-            ...rawForReactivation,
-            reactivated: {
-              at: new Date().toISOString(),
-              reason: "client_message",
-              previousStatus: "INACTIVE",
-            },
-          };
-        }
-
-        if (Object.keys(patch).length) {
-          chat = await tx.chat.update({
-            where: { id: chat.id },
-            data: patch,
-            select: {
-              id: true,
-              avitoChatId: true,
-              customerName: true,
-              itemTitle: true,
-              adUrl: true,
-              chatUrl: true,
-              status: true,
-              raw: true,
-              price: true,
-            },
-          });
-        }
+      const prevRaw = (existingChat?.raw && typeof existingChat.raw === "object") ? (existingChat.raw as any) : {};
+      if (hints.itemId && !prevRaw.itemId) {
+        patch.raw = { ...prevRaw, itemId: hints.itemId };
       }
+
+      // Если клиент написал в INACTIVE чат — реактивируем в BOT
+      if (existingChat?.status === "INACTIVE" && direction === "IN") {
+        patch.status = "BOT";
+        patch.followupSentAt = null;
+        const rawForReactivation = patch.raw ?? prevRaw;
+        patch.raw = {
+          ...rawForReactivation,
+          reactivated: {
+            at: new Date().toISOString(),
+            reason: "client_message",
+            previousStatus: "INACTIVE",
+          },
+        };
+      }
+
+      // Используем upsert вместо findUnique+create чтобы избежать P2002 при
+      // параллельных вызовах sync и webhook (race condition)
+      const chat = await tx.chat.upsert({
+        where: { avitoChatId: String(avitoChatId) },
+        create: {
+          avitoChatId: String(avitoChatId),
+          accountId: accountIdNum,
+          status: "BOT",
+          customerName: hints.customerName,
+          itemTitle: hints.itemTitle,
+          adUrl: hints.adUrl,
+          chatUrl: hints.chatUrl,
+          raw: {
+            createdFrom: "webhook",
+            type,
+            payload: body,
+            itemId: hints.itemId ?? null,
+          },
+        },
+        update: Object.keys(patch).length > 0 ? patch : { accountId: accountIdNum },
+        select: {
+          id: true,
+          avitoChatId: true,
+          customerName: true,
+          itemTitle: true,
+          adUrl: true,
+          chatUrl: true,
+          status: true,
+          raw: true,
+          price: true,
+        },
+      });
+
+      const chatWasCreated = !existingChat;
 
       let msgId: string | null = null;
       let created = false;
