@@ -29,7 +29,7 @@ export async function POST(req: Request, ctx: Ctx) {
   }
 
   await prisma.chat.update({
-    where: { id },
+    where: { id, accountId },
     data: { status: "BOT", pinned: false },
   });
 
