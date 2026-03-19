@@ -13,7 +13,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireCronToken } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { avitoSendTextMessage } from "@/lib/avito";
+import { avitoSendTextMessage, getAvitoCredentialsByAccountId } from "@/lib/avito";
 import { publish } from "@/lib/realtime";
 import { pickFirstString } from "@/lib/utils";
 
@@ -254,8 +254,9 @@ export async function POST(req: Request) {
 
         stats.followupsSent++;
       } else {
-        // Реальный режим — отправляем через Avito API
-        const resp: any = await avitoSendTextMessage(chat.avitoChatId, followupText);
+        // Реальный режим — отправляем через Avito API (используем credentials нужного аккаунта)
+        const chatCreds = await getAvitoCredentialsByAccountId(chat.accountId);
+        const resp: any = await avitoSendTextMessage(chat.avitoChatId, followupText, chatCreds);
         const outId = pickFirstString(
           resp?.id,
           resp?.message_id,
