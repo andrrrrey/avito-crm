@@ -44,6 +44,7 @@ type MessageItem = {
   direction?: "IN" | "OUT";
   sentAt?: string;
   isRead?: boolean;
+  isAi?: boolean;
   author?: "CUSTOMER" | "BOT" | "MANAGER";
   createdAt?: string;
   raw?: any;
@@ -80,6 +81,7 @@ type RealtimeEvent = {
     text: string;
     sentAt: string;
     isRead: boolean;
+    isAi?: boolean;
   };
   chatSnapshot?: ChatItem;
 };
@@ -335,10 +337,13 @@ const MessageBubble = React.memo(function MessageBubble({
 }) {
   const dir = m.direction ?? (m.author === "CUSTOMER" ? "IN" : "OUT");
   const isIn = dir === "IN";
+  // isAi: используем явный флаг из API (надёжнее chatStatus, т.к. статус чата меняется со временем)
   const isBot =
+    m.isAi === true ||
     m.author === "BOT" ||
     m.raw?.bot === true ||
-    (dir === "OUT" && chatStatus === "BOT" && m.author !== "MANAGER");
+    m.raw?.from === "ai_assistant" ||
+    m.raw?.from === "dev_test_bot";
   const isUnread = isIn && m.isRead === false;
 
   const ts = getMsgIso(m);
@@ -886,6 +891,7 @@ function PageInner() {
         text: m.text,
         sentAt: m.sentAt,
         isRead: m.isRead,
+        isAi: m.isAi,
       };
 
       mutateMsgs(

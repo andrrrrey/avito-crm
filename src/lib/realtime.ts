@@ -32,6 +32,7 @@ export type CRMRealtimeEvent = {
     text: string;
     sentAt: string;
     isRead: boolean;
+    isAi?: boolean;
   };
 
   // Снэпшот чата для мгновенного обновления списка без перезапроса.

@@ -42,14 +42,20 @@ async function readFromDb(chatId: string) {
   // rows сейчас newest->oldest, разворачиваем в old->new для UI
   const ordered = rows.slice().reverse();
 
-  return ordered.map((m) => ({
-    id: m.id,
-    chatId: m.chatId,
-    direction: m.direction,
-    text: m.text,
-    sentAt: m.sentAt,
-    isRead: m.isRead,
-  }));
+  return ordered.map((m) => {
+    const raw = m.raw && typeof m.raw === "object" ? (m.raw as any) : {};
+    const from: string = raw.from ?? raw.source ?? "";
+    const isAi = from === "ai_assistant" || from === "dev_test_bot" || raw.bot === true;
+    return {
+      id: m.id,
+      chatId: m.chatId,
+      direction: m.direction,
+      text: m.text,
+      sentAt: m.sentAt,
+      isRead: m.isRead,
+      isAi: m.direction === "OUT" ? isAi : undefined,
+    };
+  });
 }
 
 async function refreshFromAvito(chat: { id: string; avitoChatId: string | null; unreadCount: number; raw: any; accountId: number }) {
@@ -179,25 +185,42 @@ async function refreshFromAvito(chat: { id: string; avitoChatId: string | null; 
 
   await prisma.$transaction(async (tx) => {
     for (const m of mapped) {
-      await tx.message.upsert({
+      // Не обновляем direction при upsert: направление сообщения устанавливается
+      // один раз (при первом сохранении) и не должно меняться при загрузке истории.
+      // Это предотвращает перезапись direction=OUT (сообщения ИИ/менеджера) на direction=IN
+      // в случае, если учётные данные аккаунта временно некорректны.
+      const existing = await tx.message.findUnique({
         where: { chatId_avitoMessageId: { chatId: chat.id, avitoMessageId: m.avitoMessageId } },
-        create: {
-          chatId: chat.id,
-          avitoMessageId: m.avitoMessageId,
-          direction: m.direction,
-          text: m.text,
-          sentAt: m.sentAt,
-          isRead: m.isRead,
-          raw: m.raw,
-        },
-        update: {
-          direction: m.direction,
-          text: m.text,
-          sentAt: m.sentAt,
-          isRead: m.isRead,
-          raw: m.raw,
-        },
+        select: { id: true, direction: true },
       });
+
+      if (existing) {
+        // Уже существует — обновляем всё кроме direction (direction неизменен).
+        // Исключение: если сохранено как IN, но Avito подтверждает OUT — исправляем.
+        const finalDirection = (m.direction === "OUT" || existing.direction === "OUT") ? "OUT" : "IN";
+        await tx.message.update({
+          where: { id: existing.id },
+          data: {
+            direction: finalDirection,
+            text: m.text,
+            sentAt: m.sentAt,
+            isRead: m.isRead,
+            raw: m.raw,
+          },
+        });
+      } else {
+        await tx.message.create({
+          data: {
+            chatId: chat.id,
+            avitoMessageId: m.avitoMessageId,
+            direction: m.direction,
+            text: m.text,
+            sentAt: m.sentAt,
+            isRead: m.isRead,
+            raw: m.raw,
+          },
+        });
+      }
     }
 
     // пересчет непрочитанных
