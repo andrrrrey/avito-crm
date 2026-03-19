@@ -33,7 +33,7 @@ export async function POST(req: Request, ctx: Ctx) {
   const rawObj = (chat.raw && typeof chat.raw === "object") ? (chat.raw as any) : {};
 
   await prisma.chat.update({
-    where: { id },
+    where: { id, accountId },
     data: {
       status: "BOT",
       followupSentAt: null,
@@ -48,7 +48,7 @@ export async function POST(req: Request, ctx: Ctx) {
   });
 
   const snap = await prisma.chat.findUnique({
-    where: { id },
+    where: { id, accountId },
     select: {
       id: true, status: true, customerName: true, itemTitle: true, price: true,
       lastMessageAt: true, lastMessageText: true, adUrl: true, chatUrl: true,

@@ -751,7 +751,10 @@ export async function POST(req: Request) {
       }
 
       // Используем upsert вместо findUnique+create чтобы избежать P2002 при
-      // параллельных вызовах sync и webhook (race condition)
+      // параллельных вызовах sync и webhook (race condition).
+      // ВАЖНО: accountId НЕ обновляется при update — чат принадлежит тому аккаунту,
+      // которому был назначен при создании. Это предотвращает «перемещение» чата
+      // между пользователями при повторных вебхуках.
       const chat = await tx.chat.upsert({
         where: { avitoChatId: String(avitoChatId) },
         create: {
@@ -769,7 +772,7 @@ export async function POST(req: Request) {
             itemId: hints.itemId ?? null,
           },
         },
-        update: Object.keys(patch).length > 0 ? patch : { accountId: accountIdNum },
+        update: Object.keys(patch).length > 0 ? patch : { updatedAt: new Date() },
         select: {
           id: true,
           avitoChatId: true,

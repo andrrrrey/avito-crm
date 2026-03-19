@@ -32,7 +32,7 @@ export async function POST(req: Request, ctx: Ctx) {
   const nextPinned = body && body.pinned !== undefined ? Boolean(body.pinned) : !chat.pinned;
 
   const updated = await prisma.chat.update({
-    where: { id },
+    where: { id, accountId },
     data: { pinned: nextPinned },
     select: { pinned: true },
   });

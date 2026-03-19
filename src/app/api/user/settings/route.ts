@@ -99,6 +99,24 @@ export async function PUT(req: Request) {
     return NextResponse.json({ ok: false, error: "nothing_to_update" }, { status: 400 });
   }
 
+  // Проверяем, что avitoAccountId не занят другим пользователем —
+  // иначе пользователи могли бы видеть чаты чужих аккаунтов.
+  if (data.avitoAccountId != null) {
+    const conflicting = await prisma.user.findFirst({
+      where: {
+        avitoAccountId: data.avitoAccountId as number,
+        id: { not: sessionUser.id },
+      },
+      select: { id: true },
+    });
+    if (conflicting) {
+      return NextResponse.json(
+        { ok: false, error: "avito_account_id_taken" },
+        { status: 409 }
+      );
+    }
+  }
+
   const user = await prisma.user.update({
     where: { id: sessionUser.id },
     data,

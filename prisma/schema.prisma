@@ -55,9 +55,9 @@ model Chat {
 
   messages        Message[]
 
-  // индексы под твои сортировки и фильтры
-  @@index([status, pinned, lastMessageAt])
-  @@index([status, pinned, price])
+  // индексы под фильтрацию по аккаунту (обязательны для multi-user)
+  @@index([accountId, status, pinned, lastMessageAt])
+  @@index([accountId, status, pinned, price])
 }
 
 model Message {
