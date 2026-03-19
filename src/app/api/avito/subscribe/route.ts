@@ -15,20 +15,20 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Кэш состояния подписки (module-level).
+ * Кэш состояния подписки — per-account.
  * Avito API не поддерживает GET для проверки статуса вебхука (404),
  * поэтому после успешного POST/DELETE сохраняем состояние здесь.
  * При рестарте сервера сбрасывается — пользователь может нажать кнопку повторно.
  */
-let cachedWebhookState: {
+const cachedWebhookStateByAccount = new Map<number, {
   subscribed: boolean;
   webhookUrl: string | null;
   subscribedAt: string | null;
-} = {
-  subscribed: false,
-  webhookUrl: null,
-  subscribedAt: null,
-};
+}>();
+
+function getCachedState(accountId: number) {
+  return cachedWebhookStateByAccount.get(accountId) ?? { subscribed: false, webhookUrl: null, subscribedAt: null };
+}
 
 function buildWebhookUrl(accountId?: number): string {
   const base = (env.PUBLIC_BASE_URL ?? "").replace(/\/+$/, "");
@@ -97,14 +97,18 @@ export async function GET(req: Request) {
     });
   }
 
-  try {
-    const subs = await avitoGetWebhookSubscriptions();
-    let webhookUrl: string | null = null;
-    try {
-      webhookUrl = buildWebhookUrl();
-    } catch {}
+  const sessionUser = await getSessionUser(req);
+  const creds = await getAvitoCredentials(sessionUser?.id ?? undefined).catch(() => null);
 
-    // Считаем подписанными, если есть хотя бы одна подписка с URL
+  let webhookUrl: string | null = null;
+  try {
+    webhookUrl = buildWebhookUrl(creds?.accountId);
+  } catch {}
+
+  try {
+    const subs = await avitoGetWebhookSubscriptions(creds ?? undefined);
+
+    // Считаем подписанными, если есть хотя бы одна подписка с нашим URL
     const ours = webhookUrl
       ? subs.find((s) => s.url && s.url === webhookUrl)
       : null;
@@ -120,17 +124,14 @@ export async function GET(req: Request) {
     });
   } catch (e: any) {
     // Avito API не поддерживает GET для проверки статуса подписки (404).
-    // Используем кэшированное состояние после последнего POST/DELETE.
-    let webhookUrl: string | null = null;
-    try {
-      webhookUrl = buildWebhookUrl();
-    } catch {}
+    // Используем per-account кэшированное состояние после последнего POST/DELETE.
+    const cached = creds ? getCachedState(creds.accountId) : { subscribed: false, webhookUrl: null, subscribedAt: null };
 
     return NextResponse.json({
       ok: true,
-      subscribed: cachedWebhookState.subscribed,
-      activeSubscription: cachedWebhookState.subscribed
-        ? { url: cachedWebhookState.webhookUrl }
+      subscribed: cached.subscribed,
+      activeSubscription: cached.subscribed
+        ? { url: cached.webhookUrl }
         : null,
       subscriptions: [],
       webhookUrl,
@@ -154,7 +155,7 @@ export async function POST(req: Request) {
     const creds = await getAvitoCredentials(sessionUser?.id ?? undefined);
     const webhookUrl = buildWebhookUrl(creds.accountId);
     const sub = await avitoSubscribeWebhook(webhookUrl, creds);
-    cachedWebhookState = { subscribed: true, webhookUrl, subscribedAt: new Date().toISOString() };
+    cachedWebhookStateByAccount.set(creds.accountId, { subscribed: true, webhookUrl, subscribedAt: new Date().toISOString() });
     return NextResponse.json({ ok: true, subscription: sub, webhookUrl });
   } catch (e: any) {
     return NextResponse.json(
@@ -174,8 +175,12 @@ export async function DELETE(req: Request) {
   }
 
   try {
-    await avitoUnsubscribeWebhook();
-    cachedWebhookState = { subscribed: false, webhookUrl: null, subscribedAt: null };
+    const sessionUser = await getSessionUser(req);
+    const creds = await getAvitoCredentials(sessionUser?.id ?? undefined).catch(() => null);
+    await avitoUnsubscribeWebhook(creds ?? undefined);
+    if (creds) {
+      cachedWebhookStateByAccount.set(creds.accountId, { subscribed: false, webhookUrl: null, subscribedAt: null });
+    }
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json(

@@ -1,8 +1,8 @@
 // src/app/api/avito/fill-prices/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuthOrCron } from "@/lib/auth";
-import { avitoFetchAllItemsMap } from "@/lib/avito";
+import { requireAuthOrCron, getSessionUser } from "@/lib/auth";
+import { avitoFetchAllItemsMap, getAvitoCredentials } from "@/lib/avito";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,12 +45,17 @@ export async function POST(req: Request) {
   const guard = await requireAuthOrCron(req);
   if (guard) return guard;
 
-  // 1. Загружаем все объявления аккаунта одним пакетным запросом
-  const itemsMap = await avitoFetchAllItemsMap({ status: "active,old", perPage: 100, maxPages: 50 });
+  // Определяем credentials и accountId текущего пользователя
+  const sessionUser = await getSessionUser(req);
+  const creds = await getAvitoCredentials(sessionUser?.id);
+  const myAccountId = creds.accountId;
 
-  // 2. Берём все чаты у которых цена не заполнена
+  // 1. Загружаем объявления только своего аккаунта
+  const itemsMap = await avitoFetchAllItemsMap({ status: "active,old", perPage: 100, maxPages: 50 }, creds);
+
+  // 2. Берём только чаты своего аккаунта у которых цена не заполнена
   const chats = await prisma.chat.findMany({
-    where: { price: null },
+    where: { price: null, accountId: myAccountId },
     select: { id: true, adUrl: true, raw: true },
   });
 
