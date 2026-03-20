@@ -601,6 +601,27 @@ export async function avitoUnsubscribeWebhook(creds?: AvitoCredentials): Promise
  * GET /messenger/v1/subscriptions — возвращает установленный вебхук.
  * GET /messenger/v3/webhook — альтернатива.
  */
+/**
+ * Информация о текущем аккаунте Avito: GET /core/v1/accounts/self
+ */
+export async function avitoGetAccountSelf(creds?: AvitoCredentials): Promise<{
+  id: number | null;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  raw: any;
+}> {
+  const resolvedCreds = creds ?? await getAvitoCredentials();
+  const j: any = await avitoFetch("/core/v1/accounts/self", undefined, true, resolvedCreds);
+  return {
+    id: j?.id ?? null,
+    name: j?.name ?? j?.profile?.name ?? null,
+    email: j?.email ?? null,
+    phone: j?.phone ?? null,
+    raw: j,
+  };
+}
+
 export async function avitoGetWebhookSubscriptions(creds?: AvitoCredentials): Promise<AvitoWebhookSubscription[]> {
   const resolvedCreds = creds ?? await getAvitoCredentials();
   const endpoints = [
