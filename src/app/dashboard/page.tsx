@@ -79,6 +79,14 @@ type KbFile = {
   created_at: number;
 };
 
+type AvitoAccountInfo = {
+  id: number | null;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  totalItems: number | null;
+};
+
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -95,6 +103,16 @@ export default function DashboardPage() {
   const { data: balanceData } = useSWR<{ ok: boolean; data: BalanceData }>(
     "/api/billing/balance",
     fetcher,
+  );
+
+  const {
+    data: accountInfoData,
+    mutate: mutateAccountInfo,
+    isLoading: accountInfoLoading,
+  } = useSWR<{ ok: boolean; data: AvitoAccountInfo }>(
+    "/api/avito/account-info",
+    fetcher,
+    { shouldRetryOnError: false },
   );
 
   const settings = settingsData?.data;
@@ -159,6 +177,7 @@ export default function DashboardPage() {
       if (j.ok) {
         setSaveMsg("Сохранено");
         mutateSettings();
+        mutateAccountInfo();
       } else {
         setSaveMsg("Ошибка: " + (j.error || "неизвестная"));
       }
@@ -169,7 +188,7 @@ export default function DashboardPage() {
     }
   }, [
     avitoClientId, avitoClientSecret, avitoClientSecretTouched,
-    avitoAccountId, aiEnabled, aiInstructions, aiEscalatePrompt, followupEnabled, followupMessage, mutateSettings,
+    avitoAccountId, aiEnabled, aiInstructions, aiEscalatePrompt, followupEnabled, followupMessage, mutateSettings, mutateAccountInfo,
   ]);
 
   const generateInstructions = useCallback(async () => {
@@ -406,6 +425,54 @@ export default function DashboardPage() {
                 <p className="text-sm text-zinc-500 mb-4">
                   Укажите ваши Avito API-ключи для интеграции с вашим аккаунтом Avito.
                 </p>
+
+                {/* Avito account info card */}
+                {accountInfoLoading && (
+                  <div className="mb-4 rounded-xl bg-zinc-100 px-4 py-3 text-sm text-zinc-400 font-geist">
+                    Загрузка данных аккаунта Avito...
+                  </div>
+                )}
+                {!accountInfoLoading && accountInfoData?.ok && accountInfoData.data && (
+                  <div className="mb-5 rounded-xl bg-white ring-1 ring-zinc-200 px-4 py-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-semibold text-zinc-700 font-geist">Аккаунт Avito</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium font-geist">Подключён</span>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                      {accountInfoData.data.name && (
+                        <>
+                          <dt className="text-zinc-500">Имя</dt>
+                          <dd className="text-zinc-800 font-medium truncate">{accountInfoData.data.name}</dd>
+                        </>
+                      )}
+                      {accountInfoData.data.id && (
+                        <>
+                          <dt className="text-zinc-500">ID аккаунта</dt>
+                          <dd className="text-zinc-800 font-medium tabular-nums">{accountInfoData.data.id}</dd>
+                        </>
+                      )}
+                      {accountInfoData.data.email && (
+                        <>
+                          <dt className="text-zinc-500">Email</dt>
+                          <dd className="text-zinc-800 font-medium truncate">{accountInfoData.data.email}</dd>
+                        </>
+                      )}
+                      {accountInfoData.data.phone && (
+                        <>
+                          <dt className="text-zinc-500">Телефон</dt>
+                          <dd className="text-zinc-800 font-medium">{accountInfoData.data.phone}</dd>
+                        </>
+                      )}
+                      <dt className="text-zinc-500">Объявлений</dt>
+                      <dd className="text-zinc-800 font-semibold tabular-nums">
+                        {accountInfoData.data.totalItems !== null
+                          ? accountInfoData.data.totalItems.toLocaleString("ru-RU")
+                          : <span className="text-zinc-400">—</span>
+                        }
+                      </dd>
+                    </dl>
+                  </div>
+                )}
 
                 <label className="block">
                   <span className="text-sm font-medium text-zinc-700">Avito Client ID</span>
