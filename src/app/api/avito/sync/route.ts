@@ -378,9 +378,33 @@ export async function POST(req: Request) {
   const itemCache = new Map<number, { title: string | null; price: number | null; url: string | null }>();
   const MAX_ITEM_LOOKUPS = 120; // чтобы не улететь по лимитам
 
-  // Получаем credentials текущего пользователя (если авторизован), иначе первый из БД
+  // Получаем credentials текущего пользователя.
+  // Для авторизованного пользователя используем ТОЛЬКО его персональные credentials —
+  // никакого fallback на env/другого пользователя, чтобы не смешивать данные.
   const sessionUser = await getSessionUser(req);
-  const creds: AvitoCredentials = await getAvitoCredentials(sessionUser?.id);
+  let creds: AvitoCredentials;
+
+  if (sessionUser) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: sessionUser.id },
+      select: { avitoClientId: true, avitoClientSecret: true, avitoAccountId: true },
+    });
+    if (!dbUser?.avitoClientId || !dbUser?.avitoClientSecret || !dbUser?.avitoAccountId) {
+      return NextResponse.json(
+        { ok: false, error: "Настройки Avito не сконфигурированы. Укажите Client ID, Client Secret и Account ID в настройках." },
+        { status: 400 },
+      );
+    }
+    creds = {
+      clientId: dbUser.avitoClientId,
+      clientSecret: dbUser.avitoClientSecret,
+      accountId: dbUser.avitoAccountId,
+    };
+  } else {
+    // Cron-запрос без сессии: используем fallback (env или первый пользователь в БД)
+    creds = await getAvitoCredentials(undefined);
+  }
+
   const myAccountId = creds.accountId;
 
   while (pages < MAX_PAGES) {
@@ -551,9 +575,12 @@ export async function POST(req: Request) {
     if (offset > 200_000) break;
   }
 
+  // Реальное количество чатов в БД для этого аккаунта (после синхронизации)
+  const totalChatsInDb = await prisma.chat.count({ where: { accountId: myAccountId } });
+
   return NextResponse.json({
     ok: true,
-    stats: { totalChatsFetched, chatsUpserted, itemLookups },
+    stats: { totalChatsFetched, chatsUpserted, itemLookups, totalChatsInDb },
     ...(stopReason ? { stopReason } : {}),
     ...(errors.length ? { errors } : {}),
   });
