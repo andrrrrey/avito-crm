@@ -368,6 +368,9 @@ export async function POST(req: Request) {
   let chatsUpserted = 0;
   let itemLookups = 0;
 
+  // Все avitoChatId, которые вернул Avito в этом прогоне — нужны для очистки мусора
+  const syncedAvitoIds = new Set<string>();
+
   const errors: Array<{ avitoChatId?: string; error: string }> = [];
   let stopReason: null | { type: string; offset: number; message: string } = null;
 
@@ -515,6 +518,7 @@ export async function POST(req: Request) {
         });
 
         chatsUpserted++;
+        syncedAvitoIds.add(avitoChatId);
 
         // ✅ Догружаем цену/заголовок/url через Items API, если в messenger их нет
         const needPrice = (fillPrices ? (existing?.price == null) : (price == null && (existing?.price == null)));
@@ -575,12 +579,26 @@ export async function POST(req: Request) {
     if (offset > 200_000) break;
   }
 
+  // После полной синхронизации (без прерывания): удаляем чаты этого аккаунта,
+  // которых нет в ответе Avito. Это устраняет "мусорные" чаты, накопившиеся
+  // из-за прошлых ошибок (например, синхронизации от чужих credentials).
+  let chatsDeleted = 0;
+  if (!stopReason && syncedAvitoIds.size > 0) {
+    const deleted = await prisma.chat.deleteMany({
+      where: {
+        accountId: myAccountId,
+        avitoChatId: { notIn: Array.from(syncedAvitoIds) },
+      },
+    });
+    chatsDeleted = deleted.count;
+  }
+
   // Реальное количество чатов в БД для этого аккаунта (после синхронизации)
   const totalChatsInDb = await prisma.chat.count({ where: { accountId: myAccountId } });
 
   return NextResponse.json({
     ok: true,
-    stats: { totalChatsFetched, chatsUpserted, itemLookups, totalChatsInDb },
+    stats: { totalChatsFetched, chatsUpserted, chatsDeleted, itemLookups, totalChatsInDb },
     ...(stopReason ? { stopReason } : {}),
     ...(errors.length ? { errors } : {}),
   });
