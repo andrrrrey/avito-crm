@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuthOrCron, getSessionUser } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { avitoListChats, avitoGetItemInfo, getAvitoCredentials, type AvitoCredentials } from "@/lib/avito";
+import { avitoListChats, avitoGetItemInfo, avitoGetAccountSelf, getAvitoCredentials, type AvitoCredentials } from "@/lib/avito";
 import { pickFirstString, pickFirstNumber } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -403,6 +403,23 @@ export async function POST(req: Request) {
       clientSecret: dbUser.avitoClientSecret,
       accountId: dbUser.avitoAccountId,
     };
+
+    // Проверяем, что credentials реально принадлежат заявленному accountId.
+    // Это защита от случая, когда пользователь случайно сохранил чужие credentials.
+    try {
+      const self = await avitoGetAccountSelf(creds);
+      if (self.id !== null && self.id !== dbUser.avitoAccountId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Credentials не соответствуют Account ID. Реальный аккаунт Avito: ${self.id}, сохранённый Account ID: ${dbUser.avitoAccountId}. Исправьте настройки.`,
+          },
+          { status: 400 },
+        );
+      }
+    } catch {
+      // Не блокируем синхронизацию при ошибке верификации (API может быть недоступен)
+    }
   } else {
     // Cron-запрос без сессии: используем fallback (env или первый пользователь в БД)
     creds = await getAvitoCredentials(undefined);
