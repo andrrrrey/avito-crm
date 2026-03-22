@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireCronToken } from "@/lib/auth";
 import { env } from "@/lib/env";
-import { avitoFetchAllItemsMap } from "@/lib/avito";
+import { avitoFetchAllItemsMap, getAvitoCredentials } from "@/lib/avito";
 import { publish } from "@/lib/realtime";
 
 export const runtime = "nodejs";
@@ -74,10 +74,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, mock: true, stats });
   }
 
+  // Определяем для какого аккаунта обновляем цены (cron использует fallback на первый аккаунт в БД)
+  const creds = await getAvitoCredentials().catch(() => null);
+  if (!creds) {
+    return NextResponse.json({ ok: false, error: "Avito credentials not configured" }, { status: 400 });
+  }
+
   // 1. Загружаем все объявления аккаунта одним пакетным запросом
   let itemsMap: Map<number, { itemId: number; title: string | null; price: number | null; url: string | null }>;
   try {
-    itemsMap = await avitoFetchAllItemsMap({ status: "active,old", perPage: 100, maxPages: 50 });
+    itemsMap = await avitoFetchAllItemsMap({ status: "active,old", perPage: 100, maxPages: 50 }, creds);
     stats.itemsInAccount = itemsMap.size;
   } catch (e) {
     console.error("[cron/sync-prices] Failed to fetch items from Avito:", e);
@@ -87,8 +93,10 @@ export async function POST(req: Request) {
     );
   }
 
-  // 2. Берём ВСЕ чаты (не только без цены) — нам нужно обновлять актуальные цены
+  // 2. Берём чаты ТОЛЬКО этого аккаунта — в мультипользовательской системе
+  // нельзя обновлять цены чужих аккаунтов чужими данными из Avito API
   const chats = await prisma.chat.findMany({
+    where: { accountId: creds.accountId },
     select: {
       id: true,
       avitoChatId: true,

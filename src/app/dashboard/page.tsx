@@ -218,8 +218,9 @@ export default function DashboardPage() {
       const r = await apiFetch("/api/avito/sync?fillPrices=1", { method: "POST" });
       const j = await r.json();
       if (j.ok) {
-        const { totalChatsFetched, totalChatsInDb } = j.stats ?? {};
-        setSyncMsg(`Готово: получено ${totalChatsFetched ?? 0} из Avito, всего в базе ${totalChatsInDb ?? 0} чатов`);
+        const { totalChatsFetched, chatsDeleted, totalChatsInDb } = j.stats ?? {};
+        const deletedNote = (chatsDeleted ?? 0) > 0 ? `, удалено ${chatsDeleted} устаревших` : "";
+        setSyncMsg(`Готово: получено ${totalChatsFetched ?? 0} из Avito, всего в базе ${totalChatsInDb ?? 0} чатов${deletedNote}`);
       } else {
         setSyncMsg("Ошибка: " + (j.error || "неизвестная"));
       }
